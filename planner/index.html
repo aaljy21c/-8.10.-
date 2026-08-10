@@ -35,19 +35,23 @@
       </div>
       <div class="header-controls" id="header-buttons-list">
         <div class="header-gdrive-group" style="display: flex; gap: 4px; align-items: center; border-right: 1px solid var(--panel-border); padding-right: 8px; margin-right: 4px;">
+          <span id="header-gdrive-status-badge" style="font-size: 0.75rem; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid #ef4444; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap; flex-shrink: 0; margin-right: 4px;">연결 안 됨</span>
           <button type="button" id="btn-header-gdrive-login" class="header-toggle-btn" title="구글 로그인" style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">🔑 <span class="btn-text">구글 연결</span></button>
           <button type="button" id="btn-header-gdrive-backup" class="header-toggle-btn" title="드라이브 백업" disabled style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">📤 <span class="btn-text">백업</span></button>
           <button type="button" id="btn-header-gdrive-restore" class="header-toggle-btn" title="드라이브 복원" disabled style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">📥 <span class="btn-text">복원</span></button>
           <button type="button" id="btn-header-gdrive-logout" class="header-toggle-btn" title="연동 해제" style="display: none; background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">🔌 <span class="btn-text">해제</span></button>
         </div>
-        <button type="button" id="btn-toggle-search" class="header-toggle-btn active-view" title="🔍 검색창 보이기/숨기기" data-section-id="search">🔍 <span class="btn-text">검색</span></button>
-        <button type="button" id="btn-toggle-calendar" class="header-toggle-btn active-view" title="📅 달력 보이기/숨기기" data-section-id="calendar">📅 <span class="btn-text">달력</span></button>
-        <button type="button" id="btn-toggle-todos" class="header-toggle-btn active-view" title="🎯 할일 목록 보이기/숨기기" data-section-id="todos">🎯 <span class="btn-text">할일</span></button>
-        <button type="button" id="btn-toggle-records" class="header-toggle-btn active-view" title="📝 오늘의 기록 보이기/숨기기" data-section-id="records">📝 <span class="btn-text">기록</span></button>
-        <button type="button" id="btn-toggle-timeline" class="header-toggle-btn" title="⏳ 타임라인 보이기/숨기기" data-section-id="timeline">⏳ <span class="btn-text">타임라인</span></button>
-        <button type="button" id="btn-toggle-ddays" class="header-toggle-btn" title="🎉 디데이/기념일 보이기/숨기기" data-section-id="ddays">🎉 <span class="btn-text">디데이</span></button>
-        <button type="button" id="btn-toggle-analytics" class="header-toggle-btn" title="📊 통계/분석 보이기/숨기기" data-section-id="analytics">📊 <span class="btn-text">분석</span></button>
-        <button type="button" id="btn-toggle-control-panel" class="header-toggle-btn active-view" title="⚙️ 테마/설정 보이기/숨기기" data-section-id="settings">⚙️ <span class="btn-text">설정</span></button>
+        <button type="button" id="btn-toggle-header-nav" class="header-toggle-btn" title="메뉴 펼치기/접기" style="background-color: var(--bg-card); border: 1px dashed var(--panel-border);">📂 <span class="btn-text">메뉴 보기</span></button>
+        <div id="header-nav-buttons-group" style="display: none; gap: 4px; align-items: center;">
+          <button type="button" id="btn-toggle-search" class="header-toggle-btn active-view" title="🔍 검색창 보이기/숨기기" data-section-id="search">🔍 <span class="btn-text">검색</span></button>
+          <button type="button" id="btn-toggle-calendar" class="header-toggle-btn active-view" title="📅 달력 보이기/숨기기" data-section-id="calendar">📅 <span class="btn-text">달력</span></button>
+          <button type="button" id="btn-toggle-todos" class="header-toggle-btn active-view" title="🎯 할일 목록 보이기/숨기기" data-section-id="todos">🎯 <span class="btn-text">할일</span></button>
+          <button type="button" id="btn-toggle-records" class="header-toggle-btn active-view" title="📝 오늘의 기록 보이기/숨기기" data-section-id="records">📝 <span class="btn-text">기록</span></button>
+          <button type="button" id="btn-toggle-timeline" class="header-toggle-btn" title="⏳ 타임라인 보이기/숨기기" data-section-id="timeline">⏳ <span class="btn-text">타임라인</span></button>
+          <button type="button" id="btn-toggle-ddays" class="header-toggle-btn" title="🎉 디데이/기념일 보이기/숨기기" data-section-id="ddays">🎉 <span class="btn-text">디데이</span></button>
+          <button type="button" id="btn-toggle-analytics" class="header-toggle-btn" title="📊 통계/분석 보이기/숨기기" data-section-id="analytics">📊 <span class="btn-text">분석</span></button>
+          <button type="button" id="btn-toggle-control-panel" class="header-toggle-btn active-view" title="⚙️ 테마/설정 보이기/숨기기" data-section-id="settings">⚙️ <span class="btn-text">설정</span></button>
+        </div>
       </div>
     </header>
 

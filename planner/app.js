@@ -1117,7 +1117,7 @@ function triggerGDriveAutoSync() {
 
 // Sort the header buttons in the DOM based on state.headerButtonOrder
 function sortHeaderButtonsDOM() {
-  const container = document.getElementById('header-buttons-list');
+  const container = document.getElementById('header-nav-buttons-group');
   if (!container) return;
 
   // Ensure 'search' is always at the beginning, and 'settings' is always at the end
@@ -1142,7 +1142,7 @@ function sortHeaderButtonsDOM() {
 
 // Setup long-press drag-and-drop horizontal sorting for header buttons
 function setupHeaderButtonsDraggable() {
-  const container = document.getElementById('header-buttons-list');
+  const container = document.getElementById('header-nav-buttons-group');
   if (!container) return;
 
   const buttons = Array.from(container.getElementsByClassName('header-toggle-btn'));
@@ -6135,21 +6135,44 @@ function setupHeaderGDriveSync() {
   const hBackup = document.getElementById('btn-header-gdrive-backup');
   const hRestore = document.getElementById('btn-header-gdrive-restore');
   const hLogout = document.getElementById('btn-header-gdrive-logout');
+  const hBadge = document.getElementById('header-gdrive-status-badge');
   
   const mLogin = document.getElementById('btn-gdrive-login');
   const mBackup = document.getElementById('btn-gdrive-backup');
   const mRestore = document.getElementById('btn-gdrive-restore');
   const mLogout = document.getElementById('btn-gdrive-logout');
+  const mBadge = document.getElementById('gdrive-status-badge');
 
   if (hLogin && mLogin) hLogin.addEventListener('click', () => mLogin.click());
   if (hBackup && mBackup) hBackup.addEventListener('click', () => mBackup.click());
   if (hRestore && mRestore) hRestore.addEventListener('click', () => mRestore.click());
   if (hLogout && mLogout) hLogout.addEventListener('click', () => mLogout.click());
 
+  const navToggleBtn = document.getElementById('btn-toggle-header-nav');
+  const navGroup = document.getElementById('header-nav-buttons-group');
+  if (navToggleBtn && navGroup) {
+    navToggleBtn.addEventListener('click', () => {
+      if (navGroup.style.display === 'flex' || navGroup.style.display === '') {
+        navGroup.style.display = 'none';
+        navToggleBtn.innerHTML = '📂 <span class="btn-text">메뉴 보기</span>';
+      } else {
+        navGroup.style.display = 'flex';
+        navToggleBtn.innerHTML = '📂 <span class="btn-text">메뉴 닫기</span>';
+      }
+    });
+  }
+
   setInterval(() => {
     if (mBackup && hBackup) hBackup.disabled = mBackup.disabled;
     if (mRestore && hRestore) hRestore.disabled = mRestore.disabled;
     if (mLogout && hLogout) hLogout.style.display = mLogout.style.display;
+    
+    if (mBadge && hBadge) {
+      hBadge.textContent = mBadge.textContent;
+      hBadge.style.background = mBadge.style.background;
+      hBadge.style.color = mBadge.style.color;
+      hBadge.style.border = mBadge.style.border;
+    }
   }, 300);
 }
 

@@ -6129,3 +6129,38 @@ function setupLocalBackup() {
 }
 
 document.addEventListener('DOMContentLoaded', setupLocalBackup);
+
+function setupHeaderGDriveSync() {
+  const hLogin = document.getElementById('btn-header-gdrive-login');
+  const hBackup = document.getElementById('btn-header-gdrive-backup');
+  const hRestore = document.getElementById('btn-header-gdrive-restore');
+  const hLogout = document.getElementById('btn-header-gdrive-logout');
+  
+  const mLogin = document.getElementById('btn-gdrive-login');
+  const mBackup = document.getElementById('btn-gdrive-backup');
+  const mRestore = document.getElementById('btn-gdrive-restore');
+  const mLogout = document.getElementById('btn-gdrive-logout');
+
+  if (hLogin && mLogin) hLogin.addEventListener('click', () => mLogin.click());
+  if (hBackup && mBackup) hBackup.addEventListener('click', () => mBackup.click());
+  if (hRestore && mRestore) hRestore.addEventListener('click', () => mRestore.click());
+  if (hLogout && mLogout) hLogout.addEventListener('click', () => mLogout.click());
+
+  setInterval(() => {
+    if (mBackup && hBackup) hBackup.disabled = mBackup.disabled;
+    if (mRestore && hRestore) hRestore.disabled = mRestore.disabled;
+    if (mLogout && hLogout) hLogout.style.display = mLogout.style.display;
+  }, 300);
+}
+
+document.addEventListener('DOMContentLoaded', setupHeaderGDriveSync);
+
+window.addEventListener('online', () => {
+  if (localStorage.getItem('neon_planner_gdrive_connected') === 'true' && typeof autoSyncWithDrive === 'function') {
+    const badge = document.getElementById('gdrive-status-badge');
+    if (badge) {
+      badge.textContent = '🌐 인터넷 재연결됨...';
+    }
+    setTimeout(autoSyncWithDrive, 1000);
+  }
+});

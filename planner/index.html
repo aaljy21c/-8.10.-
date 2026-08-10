@@ -34,6 +34,12 @@
         </div>
       </div>
       <div class="header-controls" id="header-buttons-list">
+        <div class="header-gdrive-group" style="display: flex; gap: 4px; align-items: center; border-right: 1px solid var(--panel-border); padding-right: 8px; margin-right: 4px;">
+          <button type="button" id="btn-header-gdrive-login" class="header-toggle-btn" title="구글 로그인" style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">🔑 <span class="btn-text">구글 연결</span></button>
+          <button type="button" id="btn-header-gdrive-backup" class="header-toggle-btn" title="드라이브 백업" disabled style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">📤 <span class="btn-text">백업</span></button>
+          <button type="button" id="btn-header-gdrive-restore" class="header-toggle-btn" title="드라이브 복원" disabled style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">📥 <span class="btn-text">복원</span></button>
+          <button type="button" id="btn-header-gdrive-logout" class="header-toggle-btn" title="연동 해제" style="display: none; background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">🔌 <span class="btn-text">해제</span></button>
+        </div>
         <button type="button" id="btn-toggle-search" class="header-toggle-btn active-view" title="🔍 검색창 보이기/숨기기" data-section-id="search">🔍 <span class="btn-text">검색</span></button>
         <button type="button" id="btn-toggle-calendar" class="header-toggle-btn active-view" title="📅 달력 보이기/숨기기" data-section-id="calendar">📅 <span class="btn-text">달력</span></button>
         <button type="button" id="btn-toggle-todos" class="header-toggle-btn active-view" title="🎯 할일 목록 보이기/숨기기" data-section-id="todos">🎯 <span class="btn-text">할일</span></button>

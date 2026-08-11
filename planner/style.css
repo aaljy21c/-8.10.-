@@ -1975,10 +1975,10 @@ body.light-theme .header-toggle-btn:hover {
   display: block;
 }
 
-.phone-mode .header-controls {
-  order: 3;
+/* Header Controls Global Hidden State */
+.header-controls {
   width: 100%;
-  display: none; /* Hidden by default, toggled by logo */
+  display: none; /* Hidden by default globally */
   justify-content: center;
   align-items: center;
   gap: 4px;
@@ -1987,8 +1987,12 @@ body.light-theme .header-toggle-btn:hover {
   animation: slideDown 0.3s ease;
 }
 
-.phone-mode .header-controls.show {
+.header-controls.show {
   display: flex !important;
+}
+
+.phone-mode .header-controls {
+  order: 3;
 }
 
 @keyframes slideDown {
@@ -1996,10 +2000,10 @@ body.light-theme .header-toggle-btn:hover {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Hide manual sync buttons on mobile */
-.phone-mode #btn-header-gdrive-backup,
-.phone-mode #btn-header-gdrive-restore,
-.phone-mode #btn-header-gdrive-logout {
+/* Hide manual sync buttons globally */
+#btn-header-gdrive-backup,
+#btn-header-gdrive-restore,
+#btn-header-gdrive-logout {
   display: none !important;
 }
 

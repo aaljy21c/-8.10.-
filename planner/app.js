@@ -2538,7 +2538,7 @@ function setupEventListeners() {
     });
   }
 
-  // Mobile Menu Toggle via Planner Title
+  // Menu Toggle via Planner Title (Global)
   const headerLogo = document.querySelector('.header-logo');
   const headerControls = document.getElementById('header-buttons-list');
   if (headerLogo && headerControls) {
@@ -4219,7 +4219,9 @@ function updateUI() {
 
   const logoText = document.querySelector('.logo-text');
   if (logoText) {
-    logoText.textContent = state.appTitle || '플래너';
+    let titleStr = state.appTitle || '플래너';
+    titleStr = titleStr.replace(/📁/g, '').trim(); // Remove any folder emoji user might have added
+    logoText.textContent = titleStr;
   }
 
   if (btnToggleSearch) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'neon-planner-v16';
+const CACHE_NAME = 'neon-planner-v17';
 const urlsToCache = [
   './',
   './index.html',

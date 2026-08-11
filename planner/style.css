@@ -1978,15 +1978,17 @@ body.light-theme .header-toggle-btn:hover {
 .phone-mode .header-controls {
   order: 3;
   width: 100%;
-  display: flex; /* Restored to visible */
+  display: none; /* Hidden by default, toggled by logo */
   justify-content: center;
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+  margin-top: 8px;
+  animation: slideDown 0.3s ease;
 }
 
 .phone-mode .header-controls.show {
-  display: flex;
+  display: flex !important;
 }
 
 @keyframes slideDown {

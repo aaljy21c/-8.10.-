@@ -2538,11 +2538,13 @@ function setupEventListeners() {
     });
   }
 
-  // Mobile Menu Toggle Button (Folder Icon)
-  const btnToggleMobileMenu = document.getElementById('btn-toggle-mobile-menu');
+  // Mobile Menu Toggle via Planner Title
+  const headerLogo = document.querySelector('.header-logo');
   const headerControls = document.getElementById('header-buttons-list');
-  if (btnToggleMobileMenu && headerControls) {
-    btnToggleMobileMenu.addEventListener('click', () => {
+  if (headerLogo && headerControls) {
+    headerLogo.style.cursor = 'pointer';
+    headerLogo.title = '메뉴 열기/닫기';
+    headerLogo.addEventListener('click', () => {
       headerControls.classList.toggle('show');
     });
   }

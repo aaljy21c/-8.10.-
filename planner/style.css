@@ -1956,13 +1956,44 @@ body.light-theme .header-toggle-btn:hover {
   font-size: 0.9rem;
 }
 
+/* Folder Menu Toggle */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 4px;
+  transition: transform 0.2s;
+}
+
+.mobile-menu-btn:active {
+  transform: scale(0.9);
+}
+
+.phone-mode .mobile-menu-btn {
+  display: block;
+}
+
 .phone-mode .header-controls {
-  order: 2;
+  order: 3;
   width: 100%;
-  display: flex;
+  display: none; /* Hidden by default */
   justify-content: center;
+  align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+  margin-top: 10px; /* Space below the folder */
+  animation: slideDown 0.3s ease;
+}
+
+.phone-mode .header-controls.show {
+  display: flex;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .phone-mode .header-control-group {

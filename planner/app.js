@@ -1347,8 +1347,16 @@ async function autoSyncWithDrive() {
       return;
     }
 
-    // Metadata caching bypass: We no longer check existingFile.modifiedTime here.
-    // Instead, we always fetch the actual file content and parse its internal lastModified payload.
+    const lastSeenTime = localStorage.getItem('neon_planner_gdrive_file_modifiedTime');
+    if (existingFile.modifiedTime && existingFile.modifiedTime === lastSeenTime) {
+      if (statusBadge && statusBadge.textContent !== '✨ 자동 복원 완료 (최신화)') {
+        statusBadge.textContent = '연결 완료 (자동 동기화)';
+        statusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        statusBadge.style.color = '#10b981';
+        statusBadge.style.borderColor = '#10b981';
+      }
+      return;
+    }
 
     const contentUrl = `https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`;
     const contentRes = await fetch(contentUrl, {
@@ -2532,6 +2540,15 @@ function setupEventListeners() {
       localStorage.setItem('neon_planner_tab_icons', JSON.stringify(state.tabIcons));
       updateUI();
       closeEmojiModal();
+    });
+  }
+
+  // Mobile Menu Toggle Button (Folder Icon)
+  const btnToggleMobileMenu = document.getElementById('btn-toggle-mobile-menu');
+  const headerControls = document.getElementById('header-buttons-list');
+  if (btnToggleMobileMenu && headerControls) {
+    btnToggleMobileMenu.addEventListener('click', () => {
+      headerControls.classList.toggle('show');
     });
   }
 

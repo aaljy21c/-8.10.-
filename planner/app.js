@@ -1283,12 +1283,7 @@ function showSyncToast() {
 async function autoSyncWithDrive() {
   const statusBadge = document.getElementById('gdrive-status-badge');
   try {
-    if (statusBadge) {
-      statusBadge.textContent = '🔄 최신 동기화 확인 중...';
-      statusBadge.style.background = 'rgba(59, 130, 246, 0.15)';
-      statusBadge.style.color = '#3b82f6';
-      statusBadge.style.borderColor = '#3b82f6';
-    }
+    // Do not update UI to 'Checking...' on every poll to keep it silent and seamless
 
     let existingFile = null;
     let fileId = localStorage.getItem('neon_planner_gdrive_file_id');

@@ -1962,7 +1962,7 @@ body.light-theme .header-toggle-btn:hover {
   display: flex;
   justify-content: center;
   gap: 4px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .phone-mode .header-control-group {
@@ -3193,7 +3193,10 @@ body.light-theme .planner-link:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
+
+
 
 .bg-preset-btn {
   width: 24px;

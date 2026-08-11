@@ -1,4 +1,4 @@
-const CACHE_NAME = 'neon-planner-v9';
+const CACHE_NAME = 'neon-planner-v12';
 const urlsToCache = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -40,6 +41,6 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

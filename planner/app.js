@@ -35,9 +35,10 @@ let state = {
   showRecordPhotos: true, // Whether to display photos in saved records list
   showTodos: true, // Whether the Todo list section is expanded
   showRecords: true, // Whether the Records section is expanded
+  showRoutines: false, // Routines management panel visibility toggle
   showSearch: true, // Whether the search box is visible
   allowLinkNavigation: true, // Clickable link navigation toggle
-  headerButtonOrder: ['search', 'calendar', 'todos', 'records', 'timeline', 'ddays', 'analytics', 'settings'],
+  headerButtonOrder: ['search', 'calendar', 'todos', 'records', 'routines', 'timeline', 'ddays', 'analytics', 'settings'],
   bgHue: 0, // Custom background pastel hue (0 = gray/neutral)
   bgIntensity: 0, // Custom background pastel intensity (0-100)
   accentTheme: 'indigo', // Custom active buttons accent theme ('indigo', 'purple', 'teal', 'emerald', 'amber', 'rose', 'pink')
@@ -49,6 +50,7 @@ let state = {
     calendar: '📅',
     todos: '🎯',
     records: '📝',
+    routines: '🔄',
     timeline: '⏳',
     ddays: '🎉',
     analytics: '📊',
@@ -98,6 +100,7 @@ const RECOMMENDED_EMOJIS = {
   calendar: ['📅', '📆', '🗓️', '🌙', '⭐', '⏰', '⏳', '☀️', '🍀', '🎈'],
   todos: ['🎯', '✅', '📋', '📌', '🔔', '🚀', '🏆', '💯', '⭐', '💫'],
   records: ['📝', '✍️', '📔', '📓', '💭', '✏️', '🎨', '💌', '📸', '🧸'],
+  routines: ['🔄', '♾️', '♻️', '🔁', '💪', '🎯', '⚙️', '✨', '🔥', '📆'],
   analytics: ['📊', '📈', '💡', '🍀', '🔥', '📉', '🧬', '💎', '👑', '🎯'],
   settings: ['⚙️', '🔧', '🛠️', '🧩', '🎨', '🔑', '🔒', '🔋', '🌐', '🛸']
 };
@@ -322,6 +325,9 @@ function init() {
   // Update Undo/Redo button status
   updateHistoryButtons();
 
+  // Initialize Routines Panel
+  initRoutinesPanel();
+
   // Initial render
   updateUI();
 }
@@ -343,11 +349,13 @@ function loadFromLocalStorage() {
   if (savedRoutines) {
     try {
       const parsedRoutines = JSON.parse(savedRoutines);
-      state.routines = (parsedRoutines && typeof parsedRoutines === 'object') ? parsedRoutines : {};
+      state.routines = (parsedRoutines && Array.isArray(parsedRoutines)) ? parsedRoutines : [];
     } catch (e) {
       console.error(e);
-      state.routines = {};
+      state.routines = [];
     }
+  } else {
+    state.routines = [];
   }
 
   const savedPopulated = localStorage.getItem('neon_planner_populated_dates');
@@ -396,6 +404,11 @@ function loadFromLocalStorage() {
   const savedShowTimeline = localStorage.getItem('neon_planner_show_timeline');
   if (savedShowTimeline !== null) {
     state.showTimeline = savedShowTimeline === 'true';
+  }
+
+  const savedShowRoutines = localStorage.getItem('neon_planner_show_routines');
+  if (savedShowRoutines !== null) {
+    state.showRoutines = savedShowRoutines === 'true';
   }
 
   const savedShowDdays = localStorage.getItem('neon_planner_show_ddays');
@@ -454,6 +467,11 @@ function loadFromLocalStorage() {
         state.headerButtonOrder = parsed;
         if (!state.headerButtonOrder.includes('search')) {
           state.headerButtonOrder.unshift('search');
+        }
+        if (!state.headerButtonOrder.includes('routines')) {
+          const idx = state.headerButtonOrder.indexOf('timeline');
+          if (idx !== -1) state.headerButtonOrder.splice(idx, 0, 'routines');
+          else state.headerButtonOrder.push('routines');
         }
         if (!state.headerButtonOrder.includes('timeline')) {
           const idx = state.headerButtonOrder.indexOf('analytics');
@@ -543,6 +561,11 @@ function loadFromLocalStorage() {
 
 function saveDdays() {
   localStorage.setItem('neon_planner_ddays', JSON.stringify(state.ddays));
+  triggerGDriveAutoSync();
+}
+
+function saveRoutines() {
+  localStorage.setItem('neon_planner_routines', JSON.stringify(state.routines));
   triggerGDriveAutoSync();
 }
 
@@ -808,6 +831,22 @@ function applyAnalyticsVisibility() {
   }
 }
 
+// Apply routines section visibility
+function applyRoutinesVisibility() {
+  const panel = document.getElementById('routines-panel');
+  const btnToggle = document.getElementById('btn-toggle-routines');
+  if (!panel || !btnToggle) return;
+
+  if (state.showRoutines) {
+    panel.classList.remove('hidden');
+    btnToggle.classList.add('active-view');
+    renderRoutinesPanel();
+  } else {
+    panel.classList.add('hidden');
+    btnToggle.classList.remove('active-view');
+  }
+}
+
 // Apply timeline section visibility
 function applyTimelineVisibility() {
   const panel = document.getElementById('timeline-panel');
@@ -834,6 +873,7 @@ function applyLayoutSectionOrder() {
   const recordsWrapper = document.getElementById('records-wrapper-block');
   const analyticsPanel = document.getElementById('analytics-panel');
   const timelinePanel = document.getElementById('timeline-panel');
+  const routinesPanel = document.getElementById('routines-panel');
 
   if (!appContainer || !mainWrapper || !controlPanel || !calendarSection || !todoSection || !recordsWrapper || !analyticsPanel) return;
 
@@ -865,6 +905,12 @@ function applyLayoutSectionOrder() {
     if (recordsWrapper) recordsWrapper.classList.add('hidden');
   }
 
+  if (state.showRoutines) {
+    if (routinesPanel) routinesPanel.classList.remove('hidden');
+  } else {
+    if (routinesPanel) routinesPanel.classList.add('hidden');
+  }
+
   if (state.showTimeline) {
     if (timelinePanel) timelinePanel.classList.remove('hidden');
   } else {
@@ -884,6 +930,9 @@ function applyLayoutSectionOrder() {
   if (recordsWrapper && recordsWrapper.parentNode !== appContainer) {
     appContainer.appendChild(recordsWrapper);
   }
+  if (routinesPanel && routinesPanel.parentNode !== appContainer) {
+    appContainer.appendChild(routinesPanel);
+  }
   if (timelinePanel && timelinePanel.parentNode !== appContainer) {
     appContainer.appendChild(timelinePanel);
   }
@@ -896,6 +945,7 @@ function applyLayoutSectionOrder() {
     'calendar': calendarSection,
     'todos': todoSection,
     'records': recordsWrapper,
+    'routines': routinesPanel,
     'timeline': timelinePanel,
     'ddays': ddaysPanel,
     'analytics': analyticsPanel
@@ -911,7 +961,7 @@ function applyLayoutSectionOrder() {
 
   if (state.device === 'phone' || window.innerWidth <= 900) {
     // --- PHONE MODE or SQUEEZED PC VIEWPORT ---
-    [calendarSection, todoSection, recordsWrapper, analyticsPanel].forEach(el => {
+    [calendarSection, todoSection, recordsWrapper, routinesPanel, analyticsPanel].forEach(el => {
       el.style.borderLeft = '';
       el.style.paddingLeft = '';
       el.style.borderTop = '';
@@ -930,6 +980,7 @@ function applyLayoutSectionOrder() {
     if (state.showCalendar && calendarSection) visibleColumns.push(calendarSection);
     if (state.showTodos && todoSection) visibleColumns.push(todoSection);
     if (state.showRecords && recordsWrapper) visibleColumns.push(recordsWrapper);
+    if (state.showRoutines && routinesPanel) visibleColumns.push(routinesPanel);
     if (state.showTimeline && timelinePanel) visibleColumns.push(timelinePanel);
     if (state.showDdays && ddaysPanel) visibleColumns.push(ddaysPanel);
     if (state.showAnalytics && analyticsPanel) visibleColumns.push(analyticsPanel);
@@ -938,7 +989,7 @@ function applyLayoutSectionOrder() {
     visibleColumns.sort((a, b) => (parseInt(a.style.order) || 0) - (parseInt(b.style.order) || 0));
 
     // Reset default layout styles
-    [calendarSection, todoSection, recordsWrapper, timelinePanel, ddaysPanel, analyticsPanel].forEach(el => {
+    [calendarSection, todoSection, recordsWrapper, routinesPanel, timelinePanel, ddaysPanel, analyticsPanel].forEach(el => {
       if (el) {
         el.style.borderLeft = '';
         el.style.paddingLeft = '';
@@ -1069,6 +1120,8 @@ function triggerGDriveAutoSync() {
         tabIcons: JSON.parse(localStorage.getItem('neon_planner_tab_icons') || '{}'),
         appTitle: localStorage.getItem('neon_planner_app_title') || '',
         ddays: JSON.parse(localStorage.getItem('neon_planner_ddays') || '[]'),
+        routines: JSON.parse(localStorage.getItem('neon_planner_routines') || '[]'),
+        routinesPopulatedDates: JSON.parse(localStorage.getItem('neon_planner_populated_dates') || '{}'),
         preferences: {
           theme: localStorage.getItem('neon_planner_theme') || 'dark',
           fontSize: localStorage.getItem('neon_planner_font_size') || '16',
@@ -1208,6 +1261,8 @@ async function performAutoRestoreAndBackup() {
         if (restoreData.tabIcons) localStorage.setItem('neon_planner_tab_icons', JSON.stringify(restoreData.tabIcons));
         if (restoreData.appTitle) localStorage.setItem('neon_planner_app_title', restoreData.appTitle);
         if (restoreData.ddays) localStorage.setItem('neon_planner_ddays', JSON.stringify(restoreData.ddays));
+        if (restoreData.routines) localStorage.setItem('neon_planner_routines', JSON.stringify(restoreData.routines));
+        if (restoreData.routinesPopulatedDates) localStorage.setItem('neon_planner_populated_dates', JSON.stringify(restoreData.routinesPopulatedDates));
         if (restoreData.preferences) {
           const prefs = restoreData.preferences;
           if (prefs.theme) localStorage.setItem('neon_planner_theme', prefs.theme);
@@ -1379,6 +1434,8 @@ async function autoSyncWithDrive() {
       if (restoreData.tabIcons) localStorage.setItem('neon_planner_tab_icons', JSON.stringify(restoreData.tabIcons));
       if (restoreData.appTitle) localStorage.setItem('neon_planner_app_title', restoreData.appTitle);
       if (restoreData.ddays) localStorage.setItem('neon_planner_ddays', JSON.stringify(restoreData.ddays));
+      if (restoreData.routines) localStorage.setItem('neon_planner_routines', JSON.stringify(restoreData.routines));
+      if (restoreData.routinesPopulatedDates) localStorage.setItem('neon_planner_populated_dates', JSON.stringify(restoreData.routinesPopulatedDates));
       
       if (restoreData.preferences) {
         const prefs = restoreData.preferences;
@@ -1981,6 +2038,77 @@ function updateAnalytics() {
     });
   }
 
+  // 3.5 Update Routine Stats
+  const routineStatsContainer = document.getElementById('routine-stats-container');
+  if (routineStatsContainer) {
+    routineStatsContainer.innerHTML = '';
+    
+    // Group routines by text
+    const routineCounts = {};
+    state.routines.forEach(r => {
+      routineCounts[r.text] = { total: 0, completed: 0, category: r.category };
+    });
+    
+    // Count occurrences in todos
+    Object.keys(state.todos).forEach(dk => {
+      state.todos[dk].forEach(todo => {
+        if (todo.isRoutine && routineCounts[todo.text]) {
+          routineCounts[todo.text].total++;
+          if (todo.completed) {
+            routineCounts[todo.text].completed++;
+          }
+        }
+      });
+    });
+
+    if (state.routines.length === 0) {
+      routineStatsContainer.innerHTML = '<div style="color:var(--text-muted); font-size: 0.85rem; font-style: italic;">아직 등록된 루틴이 없습니다.</div>';
+    } else {
+      Object.keys(routineCounts).forEach(rText => {
+        const stats = routineCounts[rText];
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'center';
+        row.style.background = 'rgba(255,255,255,0.03)';
+        row.style.padding = '10px 14px';
+        row.style.borderRadius = '8px';
+        row.style.border = '1px solid var(--panel-border)';
+        
+        const left = document.createElement('div');
+        left.style.display = 'flex';
+        left.style.alignItems = 'center';
+        left.style.gap = '8px';
+        
+        const cat = getCategory(stats.category);
+        const dot = document.createElement('span');
+        dot.style.display = 'inline-block';
+        dot.style.width = '10px';
+        dot.style.height = '10px';
+        dot.style.borderRadius = '50%';
+        dot.style.backgroundColor = cat.color;
+        
+        const label = document.createElement('span');
+        label.style.fontWeight = '600';
+        label.style.fontSize = '0.9rem';
+        label.textContent = rText;
+        
+        left.appendChild(dot);
+        left.appendChild(label);
+        
+        const right = document.createElement('div');
+        right.style.fontWeight = '700';
+        right.style.color = 'var(--accent-color)';
+        right.style.fontSize = '1rem';
+        right.textContent = `총 ${stats.completed}회 완료`;
+        
+        row.appendChild(left);
+        row.appendChild(right);
+        routineStatsContainer.appendChild(row);
+      });
+    }
+  }
+
   // 4. Update Todo Tracker Selector List
   const trackerSelect = document.getElementById('tracker-todo-select');
   if (trackerSelect) {
@@ -2257,15 +2385,19 @@ function rolloverUnfinishedTodos() {
 }
 
 // Populate today/selected date with active routines
-function populateRoutinesForDate(dateKey) {
+function populateRoutinesForDate(dateKey, force = false) {
   if (state.routines.length === 0) return;
-  if (state.routinesPopulatedDates[dateKey]) return;
+  if (!force && state.routinesPopulatedDates[dateKey]) return;
 
   if (!state.todos[dateKey]) {
     state.todos[dateKey] = [];
   }
 
   state.routines.forEach(routine => {
+    // Check Date Constraints
+    if (routine.startDate && dateKey < routine.startDate) return;
+    if (routine.endDate && dateKey > routine.endDate) return;
+
     // Check if it already exists to prevent duplicate insertion
     const exists = state.todos[dateKey].some(t => t.text === routine.text && t.isRoutine);
     if (!exists) {
@@ -2777,6 +2909,17 @@ function setupEventListeners() {
     });
   }
 
+  const btnToggleRoutines = document.getElementById('btn-toggle-routines');
+  if (btnToggleRoutines) {
+    btnToggleRoutines.addEventListener('click', () => {
+      state.showRoutines = !state.showRoutines;
+      localStorage.setItem('neon_planner_show_routines', state.showRoutines);
+      applyRoutinesVisibility();
+      applyLayoutSectionOrder();
+      updateUI();
+    });
+  }
+
   const btnToggleTimeline = document.getElementById('btn-toggle-timeline');
   if (btnToggleTimeline) {
     btnToggleTimeline.addEventListener('click', () => {
@@ -2845,23 +2988,39 @@ function setupEventListeners() {
   // Analytics Tab View Toggles
   const tabBtnCategories = document.getElementById('tab-btn-categories');
   const tabBtnTodos = document.getElementById('tab-btn-todos');
+  const tabBtnRoutines = document.getElementById('tab-btn-routines');
   const viewCategories = document.getElementById('view-categories');
   const viewTodos = document.getElementById('view-todos');
+  const viewRoutines = document.getElementById('view-routines');
 
-  if (tabBtnCategories && tabBtnTodos && viewCategories && viewTodos) {
+  if (tabBtnCategories && tabBtnTodos && tabBtnRoutines && viewCategories && viewTodos && viewRoutines) {
     tabBtnCategories.addEventListener('click', () => {
       tabBtnCategories.classList.add('active');
       tabBtnTodos.classList.remove('active');
+      tabBtnRoutines.classList.remove('active');
       viewCategories.classList.remove('hidden');
       viewTodos.classList.add('hidden');
+      viewRoutines.classList.add('hidden');
       updateAnalytics();
     });
 
     tabBtnTodos.addEventListener('click', () => {
       tabBtnTodos.classList.add('active');
       tabBtnCategories.classList.remove('active');
+      tabBtnRoutines.classList.remove('active');
       viewTodos.classList.remove('hidden');
       viewCategories.classList.add('hidden');
+      viewRoutines.classList.add('hidden');
+      updateAnalytics();
+    });
+
+    tabBtnRoutines.addEventListener('click', () => {
+      tabBtnRoutines.classList.add('active');
+      tabBtnCategories.classList.remove('active');
+      tabBtnTodos.classList.remove('active');
+      viewRoutines.classList.remove('hidden');
+      viewCategories.classList.add('hidden');
+      viewTodos.classList.add('hidden');
       updateAnalytics();
     });
   }
@@ -3156,14 +3315,18 @@ function setupEventListeners() {
       const dateKey = state.selectedDate;
       const targetDateKey = parsedResult.dateKey;
 
+      const memoInput = document.getElementById('todo-edit-modal-memo');
+      const memoValue = memoInput ? memoInput.value.trim() : '';
+
       const todo = state.todos[dateKey].find(t => t.id === editingTodoId);
       if (todo) {
-        // Save if anything changed (text, category, time, or date)
-        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey) {
+        // Save if anything changed (text, category, time, date, or memo)
+        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey || (todo.memo || '') !== memoValue) {
           pushToHistory();
           todo.text = text;
           todo.category = modalSelectedCategory;
           todo.time = timeValue;
+          todo.memo = memoValue;
 
           // If date has changed, move the todo item
           if (targetDateKey !== dateKey) {
@@ -3862,6 +4025,12 @@ function openTodoEditModal(todoId) {
     textInput.value = todo.text;
   }
 
+  // Fill memo input
+  const memoInput = document.getElementById('todo-edit-modal-memo');
+  if (memoInput) {
+    memoInput.value = todo.memo || '';
+  }
+
   // Fill custom time selectors
   const parsed = parse24h(todo.time);
   const selectModalHour = document.getElementById('todo-edit-modal-hour');
@@ -3940,6 +4109,8 @@ function closeTodoEditModal() {
   if (modal) {
     modal.classList.add('hidden');
   }
+  const memoInput = document.getElementById('todo-edit-modal-memo');
+  if (memoInput) memoInput.value = '';
   const selectModalHour = document.getElementById('todo-edit-modal-hour');
   const selectModalMin = document.getElementById('todo-edit-modal-min');
   if (selectModalHour) selectModalHour.value = '';
@@ -4213,6 +4384,7 @@ function updateUI() {
   const btnToggleCalendar = document.getElementById('btn-toggle-calendar');
   const btnToggleTodos = document.getElementById('btn-toggle-todos');
   const btnToggleRecords = document.getElementById('btn-toggle-records');
+  const btnToggleRoutines = document.getElementById('btn-toggle-routines');
   const btnToggleTimeline = document.getElementById('btn-toggle-timeline');
   const btnToggleAnalytics = document.getElementById('btn-toggle-analytics');
   const btnToggleControlPanel = document.getElementById('btn-toggle-control-panel');
@@ -4236,6 +4408,9 @@ function updateUI() {
   if (btnToggleRecords) {
     btnToggleRecords.innerHTML = `${state.tabIcons.records || '📝'} <span class="btn-text">${highlightMarkup('기록', state.searchQuery)}</span>`;
   }
+  if (btnToggleRoutines) {
+    btnToggleRoutines.innerHTML = `${state.tabIcons.routines || '🔄'} <span class="btn-text">${highlightMarkup('루틴', state.searchQuery)}</span>`;
+  }
   if (btnToggleTimeline) {
     btnToggleTimeline.innerHTML = `${state.tabIcons.timeline || '⏳'} <span class="btn-text">${highlightMarkup('타임라인', state.searchQuery)}</span>`;
   }
@@ -4255,6 +4430,7 @@ function updateUI() {
   renderTodos();
   applyCopyModeBanner();
   renderDiary();
+  applyRoutinesVisibility();
   applyTimelineVisibility();
   applyDdaysVisibility();
   renderSearchResultsSection();
@@ -4263,8 +4439,9 @@ function updateUI() {
 
 // Render Dynamic Category Selection Pills
 function renderCategorySelector() {
-  if (!categorySelector) return;
-  categorySelector.innerHTML = '';
+  const routineCategorySelector = document.getElementById('routine-category-selector');
+  if (categorySelector) categorySelector.innerHTML = '';
+  if (routineCategorySelector) routineCategorySelector.innerHTML = '';
 
   // Render both default and custom categories from state
   Object.keys(state.categories).forEach(catId => {
@@ -4350,9 +4527,39 @@ function renderCategorySelector() {
       document.querySelectorAll('.cat-option').forEach(el => el.classList.remove('selected'));
       option.classList.add('selected');
       state.selectedCategory = catId;
+      
+      // Keep routine selector in sync if it exists
+      if (routineCategorySelector) {
+        routineCategorySelector.querySelectorAll('.cat-option').forEach(el => el.classList.remove('selected'));
+        const matchingRoutineOption = routineCategorySelector.querySelector(`.cat-option[data-category="${catId}"]`);
+        if (matchingRoutineOption) matchingRoutineOption.classList.add('selected');
+      }
     });
 
-    categorySelector.appendChild(option);
+    if (categorySelector) categorySelector.appendChild(option);
+
+    if (routineCategorySelector) {
+      const routineOption = option.cloneNode(true);
+      // Remove edit/delete buttons from the routine picker clone
+      const editBtn = routineOption.querySelector('.edit-cat-btn');
+      const delBtn = routineOption.querySelector('.delete-cat-btn');
+      if (editBtn) editBtn.remove();
+      if (delBtn) delBtn.remove();
+
+      routineOption.addEventListener('click', () => {
+        routineCategorySelector.querySelectorAll('.cat-option').forEach(el => el.classList.remove('selected'));
+        routineOption.classList.add('selected');
+        state.selectedCategory = catId;
+
+        // Keep main selector in sync
+        if (categorySelector) {
+          categorySelector.querySelectorAll('.cat-option').forEach(el => el.classList.remove('selected'));
+          const matchingMainOption = categorySelector.querySelector(`.cat-option[data-category="${catId}"]`);
+          if (matchingMainOption) matchingMainOption.classList.add('selected');
+        }
+      });
+      routineCategorySelector.appendChild(routineOption);
+    }
   });
 
   // Render "+" trigger pill
@@ -4881,6 +5088,14 @@ function renderTimeline() {
           metaDiv.appendChild(timeBadge);
         }
         itemLeft.appendChild(metaDiv);
+
+        // Memo rendering
+        if (todo.memo && todo.memo.trim() !== '') {
+          const memoDiv = document.createElement('div');
+          memoDiv.className = 'todo-memo-text';
+          memoDiv.innerHTML = linkify(todo.memo).replace(/\n/g, '<br>');
+          itemLeft.appendChild(memoDiv);
+        }
 
         // Action row layout
         const mainRow = document.createElement('div');
@@ -5903,6 +6118,289 @@ function deleteDday(ddayId) {
   renderDdays();
 }
 
+// --- Routines Management Panel ---
+function renderRoutinesPanel() {
+  const container = document.getElementById('routines-list-container');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!state.routines || state.routines.length === 0) {
+    container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 0.9rem;">등록된 루틴이 없습니다. 새로운 루틴을 추가해 보세요.</div>';
+    return;
+  }
+
+  state.routines.forEach(routine => {
+    const card = document.createElement('div');
+    card.className = 'routine-card';
+
+    const left = document.createElement('div');
+    left.className = 'routine-card-left';
+    left.style.display = 'flex';
+    left.style.flexDirection = 'column';
+    left.style.gap = '4px';
+
+    const titleRow = document.createElement('div');
+    titleRow.style.display = 'flex';
+    titleRow.style.alignItems = 'center';
+    titleRow.style.gap = '10px';
+
+    const catDot = document.createElement('div');
+    catDot.className = 'todo-item-category';
+    const catColor = state.categories[routine.category] ? state.categories[routine.category].color : (state.categories['other'] ? state.categories['other'].color : '#6b7280');
+    catDot.style.backgroundColor = catColor;
+    catDot.style.boxShadow = `0 0 6px ${catColor}`;
+
+    const text = document.createElement('span');
+    text.className = 'routine-card-text';
+    text.textContent = routine.text;
+    text.style.cursor = 'pointer';
+    text.title = '클릭/더블클릭/길게 누르기: 루틴 수정';
+    
+    // Add long press and click logic
+    let pressTimer = null;
+    let longPressed = false;
+    let startX = 0, startY = 0;
+    
+    const startPress = (e) => {
+      if (e.type === 'mousedown' && e.button !== 0) return;
+      longPressed = false;
+      const touch = e.touches ? e.touches[0] : e;
+      startX = touch.clientX; startY = touch.clientY;
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        longPressed = true;
+        openRoutineEditModal(routine.id);
+      }, 400);
+    };
+    const movePress = (e) => {
+      if (!pressTimer) return;
+      const touch = e.touches ? e.touches[0] : e;
+      if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) cancelPress();
+    };
+    const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+
+    text.addEventListener('touchstart', startPress, { passive: true });
+    text.addEventListener('touchend', cancelPress);
+    text.addEventListener('touchmove', movePress, { passive: true });
+    text.addEventListener('touchcancel', cancelPress);
+    text.addEventListener('mousedown', startPress);
+    text.addEventListener('mouseup', cancelPress);
+    text.addEventListener('mouseleave', cancelPress);
+    text.addEventListener('mousemove', movePress);
+    text.addEventListener('dblclick', (e) => { e.stopPropagation(); openRoutineEditModal(routine.id); });
+    text.addEventListener('click', (e) => {
+      if (longPressed) { longPressed = false; return; }
+      openRoutineEditModal(routine.id);
+    });
+
+    titleRow.appendChild(catDot);
+    titleRow.appendChild(text);
+    left.appendChild(titleRow);
+
+    if (routine.startDate || routine.endDate) {
+      const dateMeta = document.createElement('div');
+      dateMeta.style.fontSize = '0.75rem';
+      dateMeta.style.color = 'var(--text-secondary)';
+      dateMeta.style.paddingLeft = '22px';
+      dateMeta.textContent = `🗓️ ${routine.startDate || '계속'} ~ ${routine.endDate || '계속'}`;
+      left.appendChild(dateMeta);
+    }
+
+    const right = document.createElement('div');
+    right.className = 'routine-card-actions';
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'routine-del-btn';
+    delBtn.textContent = '삭제';
+    delBtn.onclick = () => deleteRoutine(routine.id);
+
+    right.appendChild(delBtn);
+    card.appendChild(left);
+    card.appendChild(right);
+    container.appendChild(card);
+  });
+}
+
+function deleteRoutine(routineId) {
+  if (confirm('이 루틴을 삭제하시겠습니까?\\n(이미 등록된 과거/오늘의 할 일은 삭제되지 않습니다)')) {
+    pushToHistory();
+    state.routines = state.routines.filter(r => r.id !== routineId);
+    saveRoutines();
+    renderRoutinesPanel();
+    updateUI();
+  }
+}
+
+let editingRoutineId = null;
+let editRoutineModalCategory = 'other';
+
+function openRoutineEditModal(routineId) {
+  const routine = state.routines.find(r => r.id === routineId);
+  if (!routine) return;
+  
+  editingRoutineId = routineId;
+  editRoutineModalCategory = routine.category || 'other';
+
+  const textInput = document.getElementById('routine-edit-modal-text');
+  const startInput = document.getElementById('routine-edit-modal-start');
+  const endInput = document.getElementById('routine-edit-modal-end');
+  
+  if (textInput) textInput.value = routine.text;
+  if (startInput) startInput.value = routine.startDate || '';
+  if (endInput) endInput.value = routine.endDate || '';
+
+  const catsContainer = document.getElementById('routine-edit-modal-cats');
+  if (catsContainer) {
+    catsContainer.innerHTML = '';
+    
+    // None/Other Option
+    const otherBtn = document.createElement('button');
+    otherBtn.type = 'button';
+    otherBtn.className = 'todo-modal-cat-btn';
+    otherBtn.innerHTML = `<div class="todo-modal-cat-dot" style="background-color: #888;"></div>없음/기본`;
+    if (editRoutineModalCategory === 'other' || editRoutineModalCategory === 'none') {
+      otherBtn.classList.add('active');
+    }
+    otherBtn.addEventListener('click', () => {
+      editRoutineModalCategory = 'other';
+      document.querySelectorAll('#routine-edit-modal-cats .todo-modal-cat-btn').forEach(btn => btn.classList.remove('active'));
+      otherBtn.classList.add('active');
+    });
+    catsContainer.appendChild(otherBtn);
+
+    Object.keys(state.categories).forEach(catId => {
+      if (catId === 'other' || catId === 'none') return;
+      const cat = state.categories[catId];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'todo-modal-cat-btn';
+      btn.innerHTML = `<div class="todo-modal-cat-dot" style="background-color: ${cat.color || '#fff'};"></div>${cat.label}`;
+      if (editRoutineModalCategory === catId) {
+        btn.classList.add('active');
+      }
+      btn.addEventListener('click', () => {
+        editRoutineModalCategory = catId;
+        document.querySelectorAll('#routine-edit-modal-cats .todo-modal-cat-btn').forEach(btn => btn.classList.remove('active'));
+        btn.classList.add('active');
+      });
+      catsContainer.appendChild(btn);
+    });
+  }
+
+  const modal = document.getElementById('routine-edit-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeRoutineEditModal() {
+  const modal = document.getElementById('routine-edit-modal');
+  if (modal) modal.classList.add('hidden');
+  editingRoutineId = null;
+}
+
+// Ensure listeners are only added once; placing this inside an init block or globally is fine since app.js is loaded once.
+// We will add it globally immediately.
+setTimeout(() => {
+  const btnSave = document.getElementById('btn-routine-edit-save');
+  const btnCancel = document.getElementById('btn-routine-edit-cancel');
+  const backdrop = document.getElementById('routine-edit-backdrop');
+  
+  if (btnCancel) btnCancel.addEventListener('click', closeRoutineEditModal);
+  if (backdrop) backdrop.addEventListener('click', closeRoutineEditModal);
+  
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      if (!editingRoutineId) return;
+      const routine = state.routines.find(r => r.id === editingRoutineId);
+      if (!routine) return;
+
+      const textInput = document.getElementById('routine-edit-modal-text');
+      const startInput = document.getElementById('routine-edit-modal-start');
+      const endInput = document.getElementById('routine-edit-modal-end');
+
+      const text = textInput ? textInput.value.trim() : '';
+      if (!text) return;
+
+      const startDate = startInput && startInput.value ? startInput.value : '';
+      const endDate = endInput && endInput.value ? endInput.value : '';
+
+      pushToHistory();
+
+      // Update routine template
+      routine.text = text;
+      routine.startDate = startDate;
+      routine.endDate = endDate;
+      routine.category = editRoutineModalCategory;
+
+      saveRoutines();
+      renderRoutinesPanel();
+      
+      // Update future/incomplete todos that match this routine's old ID or exact text
+      // (For simplicity, we'll just update todos that have `todo.isRoutine = true` and same text)
+      // Wait, we don't have routine ID in todos, we rely on `isRoutine` and matching text.
+      // We should probably rely on the routine's OLD text to find which todos to update.
+      // But the user might just want the routine panel updated. If we want to sync:
+      // It's safer to just let the user see the new text going forward when it populates.
+      // However, we can re-evaluate population for selected date immediately.
+      
+      populateRoutinesForDate(state.selectedDate, true);
+      updateUI();
+      closeRoutineEditModal();
+    });
+  }
+}, 100);
+
+function initRoutinesPanel() {
+  const addBtn = document.getElementById('add-routine-btn');
+  const input = document.getElementById('new-routine-input');
+  
+  if (addBtn && input) {
+    addBtn.addEventListener('click', () => {
+      const text = input.value.trim();
+      if (!text) return;
+      
+      pushToHistory();
+      
+      let categoryToUse = state.selectedCategory || 'other';
+      const routinePicker = document.getElementById('routine-category-selector');
+      if (routinePicker) {
+        const activeBtn = routinePicker.querySelector('.cat-option.selected');
+        if (activeBtn) categoryToUse = activeBtn.dataset.category;
+      }
+      
+      const startInput = document.getElementById('new-routine-start');
+      const endInput = document.getElementById('new-routine-end');
+      const startDate = startInput && startInput.value ? startInput.value : '';
+      const endDate = endInput && endInput.value ? endInput.value : '';
+      
+      if (!state.routines) state.routines = [];
+      state.routines.push({
+        id: Date.now(),
+        text: text,
+        category: categoryToUse,
+        startDate: startDate,
+        endDate: endDate
+      });
+      
+      input.value = '';
+      if (startInput) startInput.value = '';
+      if (endInput) endInput.value = '';
+      
+      saveRoutines();
+      renderRoutinesPanel();
+      
+      populateRoutinesForDate(state.selectedDate, true);
+      updateUI();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        addBtn.click();
+      }
+    });
+  }
+}
+
 // Parse natural language date (e.g. 7월20일, 7/20) and time (e.g. 오전 1시 20분, 자정 30분, 14:30)
 function parseNaturalLanguageTodo(inputText) {
   let text = inputText.trim();
@@ -5912,12 +6410,30 @@ function parseNaturalLanguageTodo(inputText) {
   let parsedDateKey = state.selectedDate; // default fallback
   let parsedTime = '';
 
-  // 1. Regex for Date:
-  // Matches "7월 20일", "7월20일", "7/20", "12/25", "12월25일"
-  const dateRegexes = [
-    /(\d{1,2})\s*월\s*(\d{1,2})\s*일?/i,
-    /(?:^|\s)(\d{1,2})\s*\/\s*(\d{1,2})(?=$|\s)/
-  ];
+  // 1. Relative Dates (오늘, 내일, 모레, 어제, 그제)
+  const relativeDateRegex = /(그제|그저께|어제|오늘|내일|모레|글피)/i;
+  const relMatch = text.match(relativeDateRegex);
+  if (relMatch) {
+    const keyword = relMatch[1];
+    const todayDate = new Date();
+    let offset = 0;
+    if (keyword === '그제' || keyword === '그저께') offset = -2;
+    else if (keyword === '어제') offset = -1;
+    else if (keyword === '오늘') offset = 0;
+    else if (keyword === '내일') offset = 1;
+    else if (keyword === '모레') offset = 2;
+    else if (keyword === '글피') offset = 3;
+    
+    todayDate.setDate(todayDate.getDate() + offset);
+    parsedDateKey = formatDateString(todayDate);
+    text = text.replace(relativeDateRegex, '').trim();
+  } else {
+    // 1-1. Regex for Exact Date:
+    // Matches "7월 20일", "7월20일", "7/20", "12/25", "12월25일"
+    const dateRegexes = [
+      /(\d{1,2})\s*월\s*(\d{1,2})\s*일?/i,
+      /(?:^|\s)(\d{1,2})\s*\/\s*(\d{1,2})(?=$|\s)/
+    ];
 
   for (const regex of dateRegexes) {
     const match = text.match(regex);
@@ -5932,6 +6448,8 @@ function parseNaturalLanguageTodo(inputText) {
         break; // Stop after first successful date match
       }
     }
+  }
+
   }
 
   // 2. Regex for Time:
@@ -6269,6 +6787,14 @@ function renderTodos() {
     }
     itemLeft.appendChild(textSpan);
     itemLeft.appendChild(metaDiv);
+    
+    // Memo rendering
+    if (todo.memo && todo.memo.trim() !== '') {
+      const memoDiv = document.createElement('div');
+      memoDiv.className = 'todo-memo-text';
+      memoDiv.innerHTML = linkify(todo.memo).replace(/\n/g, '<br>');
+      itemLeft.appendChild(memoDiv);
+    }
 
     // Action buttons container
     const actionBtns = document.createElement('div');
@@ -6530,3 +7056,253 @@ window.addEventListener('focus', () => {
     autoSyncWithDrive();
   }
 });
+
+function initVoiceAssistant() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  
+  if (!SpeechRecognition) {
+    console.warn("Speech Recognition API is not supported in this browser.");
+    const globalBtn = document.getElementById('btn-global-mic');
+    if (globalBtn) globalBtn.style.display = 'none';
+    const dictBtns = document.querySelectorAll('.dictation-btn');
+    dictBtns.forEach(b => b.style.display = 'none');
+    return;
+  }
+
+  const globalMic = document.getElementById('btn-global-mic');
+  const voiceOverlay = document.getElementById('voice-overlay');
+  const voiceStatusText = document.getElementById('voice-status-text');
+  const btnVoiceCancel = document.getElementById('btn-voice-cancel');
+  
+  const dictTodo = document.getElementById('btn-dictate-todo');
+  const dictRecord = document.getElementById('btn-dictate-record');
+  
+  let currentTargetInput = null; // Either a specific input element, or null for global commands
+  
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'ko-KR';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  // We will dynamically set continuous based on mode
+
+  const startListening = (targetInput) => {
+    currentTargetInput = targetInput;
+    recognition.continuous = !targetInput; // Continuous for global mic, single for dictation
+
+    try {
+      recognition.start();
+    } catch (e) {} // Ignore if already started
+    
+    if (targetInput) {
+      if (targetInput === document.getElementById('todo-input-field') && dictTodo) {
+        dictTodo.classList.add('listening');
+      } else if (targetInput === document.getElementById('new-record-text') && dictRecord) {
+        dictRecord.classList.add('listening');
+      }
+    } else {
+      if (voiceOverlay) voiceOverlay.classList.remove('hidden');
+      if (voiceStatusText) voiceStatusText.textContent = '듣고 있습니다...';
+    }
+  };
+
+  const stopListeningUI = () => {
+    if (dictTodo) dictTodo.classList.remove('listening');
+    if (dictRecord) dictRecord.classList.remove('listening');
+    if (voiceOverlay) voiceOverlay.classList.add('hidden');
+  };
+
+  recognition.onend = () => {
+    stopListeningUI();
+  };
+
+  recognition.onerror = (event) => {
+    console.error("Speech recognition error", event.error);
+    if (!currentTargetInput && voiceStatusText) {
+      voiceStatusText.textContent = '오류가 발생했습니다. 다시 시도해주세요.';
+      setTimeout(stopListeningUI, 1500);
+    } else {
+      stopListeningUI();
+    }
+  };
+
+  recognition.onresult = (event) => {
+    const current = event.resultIndex;
+    const transcript = event.results[current][0].transcript;
+    
+    if (currentTargetInput) {
+      // Dictation mode
+      currentTargetInput.value = (currentTargetInput.value + ' ' + transcript).trim();
+      stopListeningUI();
+    } else {
+      // Global Command Mode
+      if (voiceStatusText) voiceStatusText.textContent = `"${transcript}"`;
+      
+      handleVoiceCommand(transcript, recognition, stopListeningUI);
+    }
+  };
+
+  // Button Events
+  if (globalMic) {
+    globalMic.addEventListener('click', () => {
+      startListening(null);
+    });
+  }
+  
+  if (btnVoiceCancel) {
+    btnVoiceCancel.addEventListener('click', () => {
+      recognition.stop();
+      stopListeningUI();
+    });
+  }
+  
+  if (dictTodo) {
+    dictTodo.addEventListener('click', () => {
+      const inputField = document.getElementById('todo-input-field');
+      startListening(inputField);
+    });
+  }
+  
+  if (dictRecord) {
+    dictRecord.addEventListener('click', () => {
+      const inputField = document.getElementById('new-record-text');
+      startListening(inputField);
+    });
+  }
+}
+
+function handleVoiceCommand(transcript, recognition, stopListeningUI) {
+  const t = transcript.toLowerCase().trim();
+  
+  if (t.includes('종료') || t.includes('그만') || t.includes('닫아') || t.includes('끝내')) {
+    if (recognition) recognition.stop();
+    if (stopListeningUI) stopListeningUI();
+    return;
+  }
+  
+  // Navigation commands (No return, so it can chain with '추가')
+  if (t.includes('할 일 탭') || t.includes('할일 탭') || t.includes('할일 열어') || t.includes('할 일 열어') || t.includes('투두')) {
+    const btn = document.getElementById('btn-toggle-todos');
+    if (btn && !btn.classList.contains('active-view')) btn.click();
+  } else if (t.includes('분석') || t.includes('통계')) {
+    const btn = document.getElementById('btn-toggle-analytics');
+    if (btn && !btn.classList.contains('active-view')) btn.click();
+  } else if (t.includes('달력') || t.includes('캘린더')) {
+    const btn = document.getElementById('btn-toggle-calendar');
+    if (btn && !btn.classList.contains('active-view')) btn.click();
+  } else if (t.includes('기록') || t.includes('일기')) {
+    const btn = document.getElementById('btn-toggle-records');
+    if (btn && !btn.classList.contains('active-view')) btn.click();
+  } else if (t.includes('루틴')) {
+    const btn = document.getElementById('btn-toggle-routines');
+    if (btn && !btn.classList.contains('active-view')) btn.click();
+  } else if (t.includes('설정')) {
+    const btn = document.getElementById('btn-toggle-control-panel');
+    if (btn && !btn.classList.contains('active-view')) btn.click();
+  }
+  
+  // Adding Command (Todo, Routine, Record, D-day)
+  if (t.includes('추가') || t.includes('넣어') || t.includes('저장')) {
+    const textToParse = t.replace(/할\s*일에?/gi, '')
+                         .replace(/일정에?/gi, '')
+                         .replace(/루틴\s*관리에?/gi, '')
+                         .replace(/루팅\s*관리에?/gi, '')
+                         .replace(/루틴\s*관리의?/gi, '')
+                         .replace(/루팅\s*관리의?/gi, '')
+                         .replace(/루틴\s*관리해서?/gi, '')
+                         .replace(/루팅\s*관리해서?/gi, '')
+                         .replace(/루틴[의에]?/gi, '')
+                         .replace(/루팅[의에]?/gi, '')
+                         .replace(/기록에?/gi, '')
+                         .replace(/일기에?/gi, '')
+                         .replace(/디데이에?/gi, '')
+                         .replace(/기념일에?/gi, '')
+                         .replace(/추가해\s*주세요/gi, '')
+                         .replace(/저장해\s*주세요/gi, '')
+                         .replace(/넣어\s*주세요/gi, '')
+                         .replace(/추가해?/gi, '')
+                         .replace(/저장해?/gi, '')
+                         .replace(/저장/gi, '')
+                         .replace(/넣어줘?/gi, '')
+                         .replace(/주세요/gi, '')
+                         .replace(/부탁해/gi, '')
+                         .replace(/할\s*일\s*탭\s*열고/gi, '')
+                         .replace(/할\s*일\s*탭\s*열어주고/gi, '')
+                         .trim();
+                         
+    if (textToParse) {
+      const parsed = parseNaturalLanguageTodo(textToParse);
+      
+      const isRoutine = t.includes('루틴') || t.includes('루팅');
+      const isRecord = t.includes('기록') || t.includes('일기');
+      const isDday = t.includes('디데이') || t.includes('기념일');
+
+      pushToHistory();
+
+      if (isRoutine) {
+        state.routines.push({
+          id: Date.now(),
+          text: parsed.cleanedText,
+          category: 'other',
+          startDate: parsed.dateKey,
+          endDate: ''
+        });
+        saveRoutines();
+        // Immediately populate so it shows up in today's to-do list like normal routines
+        if (typeof populateRoutinesForDate === 'function') {
+          populateRoutinesForDate(state.selectedDate, true);
+        }
+        if (typeof initRoutinesPanel === 'function') initRoutinesPanel();
+        updateUI();
+      } else if (isRecord) {
+        if (!state.diaries[parsed.dateKey]) {
+          state.diaries[parsed.dateKey] = [];
+        }
+        state.diaries[parsed.dateKey].push({
+          id: Date.now(),
+          text: parsed.cleanedText,
+          images: [],
+          timestamp: parsed.time || Date.now()
+        });
+        saveDiaries();
+        if (typeof renderRecordCards === 'function') renderRecordCards();
+      } else if (isDday) {
+        state.ddays.push({
+          id: Date.now(),
+          title: parsed.cleanedText,
+          targetDate: parsed.dateKey
+        });
+        saveDdayData();
+        if (typeof renderDdays === 'function') renderDdays();
+      } else {
+        // Default to Todo
+        if (!state.todos[parsed.dateKey]) {
+          state.todos[parsed.dateKey] = [];
+        }
+        state.todos[parsed.dateKey].push({
+          id: Date.now(),
+          text: parsed.cleanedText,
+          category: 'other',
+          completed: false,
+          time: parsed.time || ''
+        });
+        saveTodos();
+        updateUI();
+      }
+      
+      // Visual feedback without blocking alert
+      const statusText = document.getElementById('voice-status-text');
+      let targetName = isRoutine ? '루틴' : (isRecord ? '기록' : (isDday ? '디데이' : '할 일'));
+      if (statusText) {
+        statusText.textContent = `✅ [${targetName}] 추가됨: ${parsed.cleanedText}`;
+      }
+      
+      // Auto-close voice assistant after a successful save
+      setTimeout(() => {
+        if (recognition) recognition.stop();
+        if (stopListeningUI) stopListeningUI();
+      }, 1500);
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initVoiceAssistant);

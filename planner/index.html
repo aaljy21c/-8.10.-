@@ -34,6 +34,9 @@
         </div>
       </div>
       <div class="header-controls" id="header-buttons-list">
+        <button type="button" id="btn-global-mic" class="header-toggle-btn" title="음성 비서 (명령어 및 할 일 추가)" style="background-color: rgba(168, 85, 247, 0.15); color: var(--accent-color); border: 1px solid var(--accent-color); font-weight: bold; margin-right: 4px;">
+          🎤 <span class="btn-text">음성 비서</span>
+        </button>
         <div class="header-gdrive-group" style="display: flex; gap: 4px; align-items: center; border-right: 1px solid var(--panel-border); padding-right: 8px; margin-right: 4px;">
           <button type="button" id="btn-header-gdrive-login" class="header-toggle-btn" title="구글 로그인" style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">🔑 <span class="btn-text">구글 연결</span></button>
           <button type="button" id="btn-header-gdrive-backup" class="header-toggle-btn" title="드라이브 백업" disabled style="background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--panel-border);">📤 <span class="btn-text">백업</span></button>
@@ -44,6 +47,7 @@
         <button type="button" id="btn-toggle-calendar" class="header-toggle-btn active-view" title="📅 달력 보이기/숨기기" data-section-id="calendar">📅 <span class="btn-text">달력</span></button>
         <button type="button" id="btn-toggle-todos" class="header-toggle-btn active-view" title="🎯 할일 목록 보이기/숨기기" data-section-id="todos">🎯 <span class="btn-text">할일</span></button>
         <button type="button" id="btn-toggle-records" class="header-toggle-btn active-view" title="📝 오늘의 기록 보이기/숨기기" data-section-id="records">📝 <span class="btn-text">기록</span></button>
+        <button type="button" id="btn-toggle-routines" class="header-toggle-btn active-view" title="🔄 루틴 관리 보이기/숨기기" data-section-id="routines">🔄 <span class="btn-text">루틴</span></button>
         <button type="button" id="btn-toggle-timeline" class="header-toggle-btn" title="⏳ 타임라인 보이기/숨기기" data-section-id="timeline">⏳ <span class="btn-text">타임라인</span></button>
         <button type="button" id="btn-toggle-ddays" class="header-toggle-btn" title="🎉 디데이/기념일 보이기/숨기기" data-section-id="ddays">🎉 <span class="btn-text">디데이</span></button>
         <button type="button" id="btn-toggle-analytics" class="header-toggle-btn" title="📊 통계/분석 보이기/숨기기" data-section-id="analytics">📊 <span class="btn-text">분석</span></button>
@@ -232,7 +236,10 @@
         <!-- Add Todo Panel -->
         <div class="todo-input-container">
           <div class="todo-input-row">
-            <input type="text" id="todo-input-field" class="todo-input" placeholder="새로운 할 일을 입력해 보세요..." autocomplete="off">
+            <div style="position: relative; flex: 1; display: flex; align-items: center;">
+              <input type="text" id="todo-input-field" class="todo-input" placeholder="새로운 할 일을 입력해 보세요..." autocomplete="off" style="padding-right: 36px;">
+              <button type="button" class="dictation-btn" id="btn-dictate-todo" title="음성으로 입력하기">🎤</button>
+            </div>
             <button type="button" id="add-todo-btn" class="add-btn">추가</button>
           </div>
           
@@ -354,7 +361,10 @@
             
             <!-- Add New Record Creator Box (Collapsible/Toggleable) -->
             <div id="new-record-creator" class="record-card hidden">
-              <textarea id="new-record-text" class="diary-textarea" placeholder="기록하고 싶은 내용을 남겨보세요..." autocomplete="off"></textarea>
+              <div style="position: relative;">
+                <textarea id="new-record-text" class="diary-textarea" placeholder="기록하고 싶은 내용을 남겨보세요..." autocomplete="off" style="padding-right: 36px;"></textarea>
+                <button type="button" class="dictation-btn" id="btn-dictate-record" title="음성으로 입력하기" style="top: 8px;">🎤</button>
+              </div>
               
               <div class="diary-media-row">
                 <label class="diary-photo-upload-label" for="new-record-photo-input">
@@ -381,6 +391,34 @@
               </button>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Routines Panel -->
+      <section id="routines-panel" class="routines-panel hidden">
+        <div class="routines-header">
+          <h2 class="routines-title">🔄 루틴 관리</h2>
+          <div style="font-size: 0.85rem; color: var(--text-secondary);">매일 반복되는 할 일(루틴)을 한눈에 보고 관리하세요.</div>
+        </div>
+        <div class="routine-input-container">
+          <div class="todo-input-row">
+            <input type="text" id="new-routine-input" class="todo-input" placeholder="새로운 루틴을 입력하세요..." autocomplete="off">
+            <button type="button" id="add-routine-btn" class="add-btn">추가</button>
+          </div>
+          <div class="todo-options-row" style="flex-wrap: wrap; gap: 8px;">
+            <div class="category-picker" id="routine-category-selector" style="flex: 1; min-width: 200px;">
+              <!-- Dynamically populated by JS -->
+            </div>
+            <div class="routine-date-range-picker" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+              <span style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;">기간 (선택):</span>
+              <input type="date" id="new-routine-start" class="todo-input" style="width: 130px; padding: 6px; font-size: 0.8rem;">
+              <span style="color: var(--text-secondary);">~</span>
+              <input type="date" id="new-routine-end" class="todo-input" style="width: 130px; padding: 6px; font-size: 0.8rem;">
+            </div>
+          </div>
+        </div>
+        <div id="routines-list-container" class="routines-list">
+          <!-- Dynamically populated routines -->
         </div>
       </section>
 
@@ -461,6 +499,7 @@
         <div class="analytics-tab-buttons">
           <button type="button" class="analytics-tab-btn active" id="tab-btn-categories">카테고리별 성취도</button>
           <button type="button" class="analytics-tab-btn" id="tab-btn-todos">할 일 항목별 추적</button>
+          <button type="button" class="analytics-tab-btn" id="tab-btn-routines">루틴 달성 현황</button>
         </div>
 
         <!-- Category Analytics View -->
@@ -490,6 +529,16 @@
             <!-- Timeline of completion history -->
             <div class="tracker-history-grid" id="tracker-history-grid">
               <!-- Dynamically populated dates -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Routines Analytics View -->
+        <div class="analytics-tab-view hidden" id="view-routines">
+          <div class="chart-container">
+            <h3 class="chart-title">🔥 루틴 실천 통계</h3>
+            <div id="routine-stats-container" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+              <!-- Dynamically populated routine stats -->
             </div>
           </div>
         </div>
@@ -576,6 +625,19 @@
           </div>
         </div>
 
+        <!-- Routines Row -->
+        <div class="modal-tab-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); min-width: 45px; text-align: left;">루틴:</span>
+          <input type="text" id="modal-input-routines" class="edit-cat-select" style="width: 70px; height: 28px; padding: 0 6px; font-size: 0.85rem; border-radius: 6px; text-align: center; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); color: var(--text-primary); outline: none;">
+          <div class="modal-row-presets" data-input-id="modal-input-routines" style="display: flex; gap: 6px;">
+            <button type="button" class="emoji-preset-btn-item" style="background: transparent; border: none; cursor: pointer; padding: 2px; font-size: 0.95rem;">🔄</button>
+            <button type="button" class="emoji-preset-btn-item" style="background: transparent; border: none; cursor: pointer; padding: 2px; font-size: 0.95rem;">♾️</button>
+            <button type="button" class="emoji-preset-btn-item" style="background: transparent; border: none; cursor: pointer; padding: 2px; font-size: 0.95rem;">♻️</button>
+            <button type="button" class="emoji-preset-btn-item" style="background: transparent; border: none; cursor: pointer; padding: 2px; font-size: 0.95rem;">🔁</button>
+            <button type="button" class="emoji-preset-btn-item" style="background: transparent; border: none; cursor: pointer; padding: 2px; font-size: 0.95rem;">💪</button>
+          </div>
+        </div>
+
         <!-- Analytics Row -->
         <div class="modal-tab-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); min-width: 45px; text-align: left;">분석:</span>
@@ -611,6 +673,40 @@
     </div>
   </div>
 
+  <!-- Routine Edit Popup Modal -->
+  <div id="routine-edit-modal" class="todo-modal-wrapper hidden">
+    <div class="todo-modal-backdrop" id="routine-edit-backdrop"></div>
+    <div class="todo-modal-content">
+      <h3 class="todo-modal-title">🔄 루틴 수정</h3>
+      
+      <div class="todo-modal-field">
+        <label for="routine-edit-modal-text" class="todo-modal-label">루틴 내용</label>
+        <input type="text" id="routine-edit-modal-text" class="todo-modal-input" placeholder="루틴 내용을 입력해 주세요" style="padding: 10px; box-sizing: border-box;">
+      </div>
+      
+      <div class="todo-modal-field">
+        <label class="todo-modal-label">실천 기간 (선택사항)</label>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <input type="date" id="routine-edit-modal-start" class="todo-modal-input" style="flex: 1; min-width: 120px;">
+          <span style="color: var(--text-secondary);">~</span>
+          <input type="date" id="routine-edit-modal-end" class="todo-modal-input" style="flex: 1; min-width: 120px;">
+        </div>
+      </div>
+      
+      <div class="todo-modal-field">
+        <label class="todo-modal-label">카테고리 (탭) 선택</label>
+        <div class="todo-modal-cats-grid" id="routine-edit-modal-cats">
+          <!-- Dynamically populated category buttons -->
+        </div>
+      </div>
+      
+      <div class="todo-modal-actions">
+        <button type="button" id="btn-routine-edit-save" class="todo-modal-btn save">💾 저장</button>
+        <button type="button" id="btn-routine-edit-cancel" class="todo-modal-btn cancel">취소</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Todo Edit Popup Modal -->
   <div id="todo-edit-modal" class="todo-modal-wrapper hidden">
     <div class="todo-modal-backdrop" id="todo-edit-backdrop"></div>
@@ -620,6 +716,11 @@
       <div class="todo-modal-field">
         <label for="todo-edit-modal-text" class="todo-modal-label">할 일 내용</label>
         <textarea id="todo-edit-modal-text" class="todo-modal-input" placeholder="할 일을 입력해 주세요" rows="3" style="resize: vertical; min-height: 80px; padding: 10px; line-height: 1.4; font-family: inherit; box-sizing: border-box;"></textarea>
+      </div>
+      
+      <div class="todo-modal-field">
+        <label for="todo-edit-modal-memo" class="todo-modal-label">메모 (수행 기록/특이사항)</label>
+        <textarea id="todo-edit-modal-memo" class="todo-modal-input" placeholder="수행하면서 있었던 일이나 특이사항을 적어보세요..." rows="2" style="resize: vertical; min-height: 60px; padding: 10px; line-height: 1.4; font-family: inherit; box-sizing: border-box;"></textarea>
       </div>
       
       <div class="todo-modal-field">
@@ -750,6 +851,17 @@
       <div class="todo-modal-actions" style="margin-top: 8px;">
         <button type="button" id="btn-font-size-modal-close" class="todo-modal-btn save" style="width: 100%;">확인</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Voice Assistant Overlay -->
+  <div id="voice-overlay" class="voice-overlay hidden">
+    <div class="voice-overlay-content">
+      <div class="voice-pulse-ring"></div>
+      <div class="voice-icon-large">🎤</div>
+      <div class="voice-status" id="voice-status-text">듣고 있습니다...</div>
+      <div class="voice-hint">명령어: "할 일 탭 열어", "분석 화면 열어"<br>할 일 추가: "내일 2시 운동 할 일 추가"</div>
+      <button type="button" class="voice-cancel-btn" id="btn-voice-cancel">취소</button>
     </div>
   </div>
 

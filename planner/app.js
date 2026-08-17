@@ -3035,8 +3035,10 @@ function setupEventListeners() {
 
   // Add Todo
   addTodoBtn.addEventListener('click', handleAddTodo);
-  todoInputField.addEventListener('keypress', (e) => {
+  todoInputField.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
+      if (e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
       handleAddTodo();
     }
   });
@@ -6355,6 +6357,14 @@ function initRoutinesPanel() {
   const input = document.getElementById('new-routine-input');
   
   if (addBtn && input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        if (e.isComposing || e.keyCode === 229) return;
+        e.preventDefault();
+        addBtn.click();
+      }
+    });
+    
     addBtn.addEventListener('click', () => {
       const text = input.value.trim();
       if (!text) return;

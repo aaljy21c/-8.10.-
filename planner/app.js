@@ -14,7 +14,7 @@ let state = {
   fontSize: 16, // Font size in px (10-28)
   dateSize: 14, // Date number font size in px (10-28)
   showCalendar: true, // Calendar visibility toggle
-  showControlPanel: true, // Control panel visibility toggle
+  showControlPanel: false, // Control panel visibility toggle (collapsed by default)
   showAnalytics: false, // Analytics panel visibility toggle
   showTimeline: false, // Timeline panel visibility toggle
   showDdays: false, // Ddays panel visibility toggle
@@ -4516,7 +4516,11 @@ function renderCategoryFilterTabs() {
   const totalCount = currentDayTodos.length;
   const catCounts = {};
   currentDayTodos.forEach(t => {
-    const cat = t.category || 'other';
+    let cat = t.category || 'other';
+    if (!state.categories[cat]) {
+      const matchKey = Object.keys(state.categories).find(k => state.categories[k].label === cat);
+      if (matchKey) cat = matchKey;
+    }
     catCounts[cat] = (catCounts[cat] || 0) + 1;
   });
 
@@ -4598,7 +4602,8 @@ function renderCategorySelector() {
   Object.keys(state.categories).forEach(catId => {
     const cat = state.categories[catId];
     const option = document.createElement('span');
-    option.className = `cat-option ${catId === state.selectedCategory ? 'selected' : ''}`;
+    const isSelected = (catId === state.selectedCategory) || (state.todoFilterCategory !== 'all' && catId === state.todoFilterCategory);
+    option.className = `cat-option ${isSelected ? 'selected' : ''}`;
     
     if (cat.class) {
       option.classList.add(cat.class);
@@ -4675,16 +4680,7 @@ function renderCategorySelector() {
     }
 
     option.addEventListener('click', () => {
-      document.querySelectorAll('.cat-option').forEach(el => el.classList.remove('selected'));
-      option.classList.add('selected');
-      state.selectedCategory = catId;
-      
-      // Keep routine selector in sync if it exists
-      if (routineCategorySelector) {
-        routineCategorySelector.querySelectorAll('.cat-option').forEach(el => el.classList.remove('selected'));
-        const matchingRoutineOption = routineCategorySelector.querySelector(`.cat-option[data-category="${catId}"]`);
-        if (matchingRoutineOption) matchingRoutineOption.classList.add('selected');
-      }
+      handleSelectTodoFilterCategory(catId);
     });
 
     if (categorySelector) categorySelector.appendChild(option);
@@ -6805,7 +6801,12 @@ function renderTodos() {
   const filterCat = state.todoFilterCategory || 'all';
   let filteredTodos = dayTodos;
   if (filterCat !== 'all') {
-    filteredTodos = dayTodos.filter(todo => (todo.category || 'other') === filterCat);
+    const filterCatObj = state.categories[filterCat];
+    const filterCatLabel = filterCatObj ? filterCatObj.label.toLowerCase() : '';
+    filteredTodos = dayTodos.filter(todo => {
+      const cat = (todo.category || 'other').toLowerCase();
+      return cat === filterCat.toLowerCase() || (filterCatLabel && cat === filterCatLabel);
+    });
   }
 
   if (dayTodos.length === 0) {

@@ -719,15 +719,15 @@ h1, h2, h3 {
 /* Todo Category Filter Tabs Bar */
 .todo-cat-filter-container {
   margin-top: 14px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   width: 100%;
 }
 
 .todo-cat-filter-tabs {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
-  padding: 2px 2px 6px 2px;
+  padding: 4px 2px 8px 2px;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
   -webkit-overflow-scrolling: touch;
@@ -742,12 +742,12 @@ h1, h2, h3 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
-  border-radius: 18px;
-  font-size: 0.82rem;
+  padding: 6px 13px;
+  border-radius: 20px;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid var(--panel-border);
+  border: 1.5px solid var(--panel-border);
   background: var(--bg-card);
   color: var(--text-secondary);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -757,9 +757,9 @@ h1, h2, h3 {
 }
 
 .todo-cat-filter-tab:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
 }
 
@@ -1751,7 +1751,7 @@ body.light-theme .lightness-slider {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--panel-border);
   border-radius: 16px;
@@ -1760,7 +1760,8 @@ body.light-theme .lightness-slider {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   position: relative;
   z-index: 1100;
-  flex-wrap: nowrap;
+  flex-wrap: nowrap !important;
+  gap: 10px;
 }
 
 .header-search {
@@ -1769,11 +1770,14 @@ body.light-theme .lightness-slider {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--panel-border);
   border-radius: 20px;
-  padding: 6px 14px;
-  gap: 8px;
-  width: 250px;
+  padding: 5px 12px;
+  gap: 6px;
+  width: 200px;
+  max-width: 220px;
+  min-width: 110px;
+  flex-shrink: 1;
   transition: var(--transition);
-  margin: 0 16px;
+  margin: 0;
   position: relative;
 }
 
@@ -1983,10 +1987,13 @@ body.light-theme .search-result-card:hover {
 
 /* --- Header Controls & Toggle Buttons --- */
 .header-controls {
-  display: flex;
+  display: flex !important;
   align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
+  gap: 5px;
+  flex-wrap: nowrap !important;
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 /* --- Floating History Controls (Undo/Redo) --- */
@@ -2044,7 +2051,8 @@ body.light-theme .floating-history-controls .ctrl-btn:hover:not(:disabled) {
 
 .header-control-group {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  align-items: center;
 }
 
 .header-divider {
@@ -2056,17 +2064,20 @@ body.light-theme .floating-history-controls .ctrl-btn:hover:not(:disabled) {
 .header-toggle-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 0 10px;
-  height: 32px;
-  border-radius: 16px;
+  padding: 0 8px;
+  height: 30px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--panel-border);
   color: var(--text-secondary);
   cursor: pointer;
   transition: var(--transition);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .header-toggle-btn:hover {
@@ -2265,24 +2276,21 @@ body.light-theme .header-toggle-btn:hover {
   display: block;
 }
 
-/* Header Controls Global Hidden State */
-.header-controls {
+/* Header Controls in Phone Mode */
+.phone-mode .header-controls {
   width: 100%;
-  display: none; /* Hidden by default globally */
+  display: none; /* Hidden by default in phone mode */
   justify-content: center;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
   margin-top: 8px;
+  order: 3;
   animation: slideDown 0.3s ease;
 }
 
-.header-controls.show {
+.phone-mode .header-controls.show {
   display: flex !important;
-}
-
-.phone-mode .header-controls {
-  order: 3;
 }
 
 @keyframes slideDown {
@@ -5036,23 +5044,56 @@ body.light-theme #font-size-modal #font-size-modal-backdrop {
   }
 }
 
-/* Optimize header dimensions on mid-sized PC screens to prevent wrapping */
-@media (max-width: 1200px) and (min-width: 901px) {
+/* Optimize header dimensions on PC screens to strictly guarantee 1 clean line */
+@media (max-width: 1350px) and (min-width: 901px) {
   .header-toggle-btn {
-    padding: 0 8px !important;
-    font-size: 0.78rem !important;
-    height: 30px !important;
+    padding: 0 6px !important;
+    font-size: 0.77rem !important;
+    height: 29px !important;
+    gap: 3px !important;
   }
   .header-search {
-    width: 180px !important;
-    margin: 0 8px !important;
-    padding: 5px 10px !important;
+    width: 150px !important;
+    min-width: 100px !important;
+    padding: 4px 8px !important;
   }
   .global-header {
-    padding: 8px 16px !important;
+    padding: 8px 14px !important;
+    gap: 8px !important;
+  }
+  .header-controls {
+    gap: 3px !important;
   }
   .header-logo {
-    font-size: 1.1rem !important;
+    font-size: 1.05rem !important;
+  }
+  .header-gdrive-group {
+    padding-right: 4px !important;
+    margin-right: 2px !important;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .header-toggle-btn {
+    padding: 0 5px !important;
+    font-size: 0.73rem !important;
+    height: 28px !important;
+    gap: 2px !important;
+  }
+  .header-toggle-btn .btn-text {
+    font-size: 0.72rem !important;
+  }
+  .header-search {
+    width: 120px !important;
+    min-width: 80px !important;
+    padding: 4px 6px !important;
+  }
+  .global-header {
+    padding: 6px 10px !important;
+    gap: 4px !important;
+  }
+  .header-controls {
+    gap: 2px !important;
   }
 }
 

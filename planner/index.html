@@ -277,12 +277,18 @@
               </div>
             </div>
 
-            <!-- Routine Repetition Checkbox & Time Picker -->
+            <!-- Routine Repetition Checkbox & Important Checkbox & Time Picker -->
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-              <label class="routine-label" for="routine-checkbox" style="margin: 0;">
-                <input type="checkbox" id="routine-checkbox" class="routine-checkbox">
-                <span>매일 반복 (루틴)</span>
-              </label>
+              <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                <label class="routine-label" for="routine-checkbox" style="margin: 0;">
+                  <input type="checkbox" id="routine-checkbox" class="routine-checkbox">
+                  <span>매일 반복 (루틴)</span>
+                </label>
+                <label class="important-label" for="important-checkbox" style="margin: 0; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.8rem; color: #fbbf24; font-weight: 600;">
+                  <input type="checkbox" id="important-checkbox" class="important-checkbox">
+                  <span>⭐ 중요</span>
+                </label>
+              </div>
 
               <!-- Custom Time Selector Trigger & Dropdown -->
               <div class="todo-time-custom-container">
@@ -336,6 +342,11 @@
                 </div>
               </div>
             </div>
+          </div>
+        <!-- Todo Category Filter Tabs -->
+        <div class="todo-cat-filter-container" id="todo-cat-filter-container">
+          <div class="todo-cat-filter-tabs" id="todo-cat-filter-tabs" role="tablist" aria-label="카테고리별 할일 필터">
+            <!-- Dynamically populated category filter tabs: [전체] [건강] [가정] ... -->
           </div>
         </div>
 
@@ -770,6 +781,13 @@
         <div class="todo-modal-cats-grid" id="todo-edit-modal-cats">
           <!-- Dynamically populated category buttons -->
         </div>
+      </div>
+
+      <div class="todo-modal-field" style="margin-top: 4px;">
+        <label class="routine-label" for="todo-edit-modal-important" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: #fbbf24; font-weight: 600;">
+          <input type="checkbox" id="todo-edit-modal-important" class="important-checkbox">
+          <span>⭐ 중요 표시 (목록 최상단에 고정)</span>
+        </label>
       </div>
       
       <div class="todo-modal-actions">

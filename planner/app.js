@@ -8,6 +8,7 @@ let state = {
   selectedDate: '', // YYYY-MM-DD
   currentMonth: null, // Date object representing the month currently displayed
   selectedCategory: 'health', // Default selected category for new todo
+  todoFilterCategory: 'all', // Category filter for Todo list ('all' or specific category ID)
   categories: {}, // Combined default and custom categories
   device: 'pc', // 'pc' or 'phone'
   fontSize: 16, // Font size in px (10-28)
@@ -68,7 +69,6 @@ let gdriveAccessToken = null;
 let gdriveSyncTimeout = null;
 let gdriveRefreshTimer = null;
 let gdrivePollInterval = null;
-let isSyncingInProgress = false;
 
 // Carousel Lightbox State
 let lightboxImages = [];
@@ -143,6 +143,20 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// Helper to extract RGB numbers from hex
+function hexToRgb(hex) {
+  if (!hex || typeof hex !== 'string') return null;
+  let c = hex.replace('#', '');
+  if (c.length === 3) {
+    c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+  }
+  if (c.length !== 6) return null;
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  return { r, g, b };
+}
+
 // Helper to convert HSL to HEX
 function hslToHex(h, s, l) {
   s /= 100;
@@ -197,6 +211,8 @@ const selectedDateDisplay = document.getElementById('selected-date-display');
 const todoInputField = document.getElementById('todo-input-field');
 const addTodoBtn = document.getElementById('add-todo-btn');
 const categorySelector = document.getElementById('category-selector');
+const todoCatFilterTabs = document.getElementById('todo-cat-filter-tabs');
+const todoCatFilterContainer = document.getElementById('todo-cat-filter-container');
 const todoItemsList = document.getElementById('todo-items-list');
 const routineCheckbox = document.getElementById('routine-checkbox');
 
@@ -1094,7 +1110,6 @@ function autoRefreshGDriveToken() {
 
 // Background Auto-sync to Google Drive (if logged in and connected)
 function triggerGDriveAutoSync() {
-  if (isSyncingInProgress) return;
   const prevMod = parseInt(localStorage.getItem('neon_planner_last_modified') || '0', 10);
   const newMod = Math.max(Date.now(), prevMod + 1);
   localStorage.setItem('neon_planner_last_modified', newMod.toString());
@@ -1104,9 +1119,8 @@ function triggerGDriveAutoSync() {
     clearTimeout(gdriveSyncTimeout);
   }
 
-  // Debounce for 0.5 seconds to group rapid user actions
+  // Debounce for 1.5 seconds to group rapid user actions (like toggling multiple checkboxes)
   gdriveSyncTimeout = setTimeout(async () => {
-    if (isSyncingInProgress) return;
     const statusBadge = document.getElementById('gdrive-status-badge');
     if (statusBadge) {
       statusBadge.textContent = '🔄 동기화 중...';
@@ -1246,192 +1260,57 @@ function triggerGDriveAutoSync() {
 }
 
 async function performAutoRestoreAndBackup() {
-  if (isSyncingInProgress) return;
-  isSyncingInProgress = true;
-
-  const statusBadge = document.getElementById('gdrive-status-badge');
-  if (statusBadge) {
-    statusBadge.textContent = '🔄 동기화 확인 중...';
-    statusBadge.style.background = 'rgba(59, 130, 246, 0.15)';
-    statusBadge.style.color = '#3b82f6';
-    statusBadge.style.borderColor = '#3b82f6';
-  }
-
-  // 동기화 중 폴링 간섭 방지
-  if (gdrivePollInterval) {
-    clearInterval(gdrivePollInterval);
-    gdrivePollInterval = null;
-  }
-
   try {
-    const searchUrl = "https://www.googleapis.com/drive/v3/files?q=name='neon_planner_backup.json'+and+trashed=false&spaces=appDataFolder&fields=files(id,modifiedTime)";
-    const searchRes = await fetch(searchUrl, { 
-      headers: { 
-        'Authorization': `Bearer ${gdriveAccessToken}`,
-        'Cache-Control': 'no-cache'
-      },
-      cache: 'no-store'
-    });
+    const searchUrl = "https://www.googleapis.com/drive/v3/files?q=name='neon_planner_backup.json'+and+trashed=false&spaces=appDataFolder&fields=files(id)";
+    const searchRes = await fetch(searchUrl, { headers: { 'Authorization': `Bearer ${gdriveAccessToken}` } });
     if (searchRes.status === 401 || searchRes.status === 403) throw new Error('Auth Expired');
     const searchData = await searchRes.json();
     const existingFile = searchData.files && searchData.files[0];
 
     if (existingFile) {
-      // 1. 이미 구글 드라이브에 다른 기기(A 등)가 올려둔 백업 데이터가 있는 경우:
-      // 신규 연동 기기(B)는 무조건 클라우드 데이터를 우선 복원(다운로드)합니다.
       const contentUrl = `https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`;
-      const contentRes = await fetch(contentUrl, { 
-        headers: { 
-          'Authorization': `Bearer ${gdriveAccessToken}`,
-          'Cache-Control': 'no-cache'
-        },
-        cache: 'no-store'
-      });
-      if (!contentRes.ok) throw new Error('백업 데이터 읽기 실패');
-      const restoreData = await contentRes.json();
-
-      // 만약을 위해 현재 로컬 데이터를 임시 안전 백업
-      try {
-        const currentLocal = {
-          todos: localStorage.getItem('neon_planner_todos'),
-          diaries: localStorage.getItem('neon_planner_diaries'),
-          savedAt: Date.now()
-        };
-        localStorage.setItem('neon_planner_backup_pre_sync', JSON.stringify(currentLocal));
-      } catch (e) {}
-
-      if (restoreData.todos) localStorage.setItem('neon_planner_todos', JSON.stringify(restoreData.todos));
-      if (restoreData.diaries) localStorage.setItem('neon_planner_diaries', JSON.stringify(restoreData.diaries));
-      if (restoreData.categories) localStorage.setItem('neon_planner_categories', JSON.stringify(restoreData.categories));
-      if (restoreData.tabIcons) localStorage.setItem('neon_planner_tab_icons', JSON.stringify(restoreData.tabIcons));
-      if (restoreData.appTitle) localStorage.setItem('neon_planner_app_title', restoreData.appTitle);
-      if (restoreData.ddays) localStorage.setItem('neon_planner_ddays', JSON.stringify(restoreData.ddays));
-      if (restoreData.routines) localStorage.setItem('neon_planner_routines', JSON.stringify(restoreData.routines));
-      if (restoreData.routinesPopulatedDates) localStorage.setItem('neon_planner_populated_dates', JSON.stringify(restoreData.routinesPopulatedDates));
-      if (restoreData.preferences) {
-        const prefs = restoreData.preferences;
-        if (prefs.theme) localStorage.setItem('neon_planner_theme', prefs.theme);
-        if (prefs.fontSize) localStorage.setItem('neon_planner_font_size', prefs.fontSize);
-        if (prefs.dateSize) localStorage.setItem('neon_planner_date_size', prefs.dateSize);
-        if (prefs.bgHue) localStorage.setItem('neon_planner_bg_hue', prefs.bgHue);
-        if (prefs.bgIntensity) localStorage.setItem('neon_planner_bg_intensity', prefs.bgIntensity);
-        if (prefs.accentColor) localStorage.setItem('neon_planner_accent_color', prefs.accentColor);
-        if (prefs.accentIntensity) localStorage.setItem('neon_planner_accent_intensity', prefs.accentIntensity);
-        if (prefs.showCalendar) localStorage.setItem('neon_planner_show_calendar', prefs.showCalendar);
-        if (prefs.showTodos) localStorage.setItem('neon_planner_show_todos', prefs.showTodos);
-        if (prefs.showRecords) localStorage.setItem('neon_planner_show_records', prefs.showRecords);
-        if (prefs.showAnalytics) localStorage.setItem('neon_planner_show_analytics', prefs.showAnalytics);
-        if (prefs.showSearch) localStorage.setItem('neon_planner_show_search', prefs.showSearch);
-        if (prefs.buttonOrder) localStorage.setItem('neon_planner_button_order', prefs.buttonOrder);
+      const contentRes = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${gdriveAccessToken}` } });
+      if (contentRes.ok) {
+        const restoreData = await contentRes.json();
+        if (restoreData.todos) localStorage.setItem('neon_planner_todos', JSON.stringify(restoreData.todos));
+        if (restoreData.diaries) localStorage.setItem('neon_planner_diaries', JSON.stringify(restoreData.diaries));
+        if (restoreData.categories) localStorage.setItem('neon_planner_categories', JSON.stringify(restoreData.categories));
+        if (restoreData.tabIcons) localStorage.setItem('neon_planner_tab_icons', JSON.stringify(restoreData.tabIcons));
+        if (restoreData.appTitle) localStorage.setItem('neon_planner_app_title', restoreData.appTitle);
+        if (restoreData.ddays) localStorage.setItem('neon_planner_ddays', JSON.stringify(restoreData.ddays));
+        if (restoreData.routines) localStorage.setItem('neon_planner_routines', JSON.stringify(restoreData.routines));
+        if (restoreData.routinesPopulatedDates) localStorage.setItem('neon_planner_populated_dates', JSON.stringify(restoreData.routinesPopulatedDates));
+        if (restoreData.preferences) {
+          const prefs = restoreData.preferences;
+          if (prefs.theme) localStorage.setItem('neon_planner_theme', prefs.theme);
+          if (prefs.fontSize) localStorage.setItem('neon_planner_font_size', prefs.fontSize);
+          if (prefs.dateSize) localStorage.setItem('neon_planner_date_size', prefs.dateSize);
+          if (prefs.bgHue) localStorage.setItem('neon_planner_bg_hue', prefs.bgHue);
+          if (prefs.bgIntensity) localStorage.setItem('neon_planner_bg_intensity', prefs.bgIntensity);
+          if (prefs.accentColor) localStorage.setItem('neon_planner_accent_color', prefs.accentColor);
+          if (prefs.accentIntensity) localStorage.setItem('neon_planner_accent_intensity', prefs.accentIntensity);
+          if (prefs.showCalendar) localStorage.setItem('neon_planner_show_calendar', prefs.showCalendar);
+          if (prefs.showTodos) localStorage.setItem('neon_planner_show_todos', prefs.showTodos);
+          if (prefs.showRecords) localStorage.setItem('neon_planner_show_records', prefs.showRecords);
+          if (prefs.showAnalytics) localStorage.setItem('neon_planner_show_analytics', prefs.showAnalytics);
+          if (prefs.showSearch) localStorage.setItem('neon_planner_show_search', prefs.showSearch);
+          if (prefs.buttonOrder) localStorage.setItem('neon_planner_button_order', prefs.buttonOrder);
+        }
+        localStorage.setItem('neon_planner_last_modified', restoreData.lastModified ? restoreData.lastModified.toString() : Date.now().toString());
       }
-
-      localStorage.setItem('neon_planner_gdrive_file_id', existingFile.id);
-      if (existingFile.modifiedTime) {
-        localStorage.setItem('neon_planner_gdrive_file_modifiedTime', existingFile.modifiedTime);
-      }
-      localStorage.setItem('neon_planner_last_modified', restoreData.lastModified ? restoreData.lastModified.toString() : Date.now().toString());
-
-      if (statusBadge) {
-        statusBadge.textContent = '✨ 복원 완료 (최신화)';
-        statusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-        statusBadge.style.color = '#10b981';
-        statusBadge.style.borderColor = '#10b981';
-      }
-
-      alert('✨ 기존에 연동된 기기의 플래너 데이터를 성공적으로 불러왔습니다!\n화면을 새로고침하여 최신 데이터를 반영합니다.');
-      window.location.reload();
-      return;
-    } else {
-      // 2. 구글 드라이브에 백업 파일이 전혀 없는 경우 (완전 첫 구글 연동인 첫 기기):
-      // 현재 기기의 로컬 데이터를 신규 파일로 업로드하여 최초 백업 파일을 생성합니다.
-      const backupData = {
-        todos: JSON.parse(localStorage.getItem('neon_planner_todos') || '{}'),
-        diaries: JSON.parse(localStorage.getItem('neon_planner_diaries') || '{}'),
-        categories: JSON.parse(localStorage.getItem('neon_planner_categories') || '{}'),
-        tabIcons: JSON.parse(localStorage.getItem('neon_planner_tab_icons') || '{}'),
-        appTitle: localStorage.getItem('neon_planner_app_title') || '',
-        ddays: JSON.parse(localStorage.getItem('neon_planner_ddays') || '[]'),
-        routines: JSON.parse(localStorage.getItem('neon_planner_routines') || '[]'),
-        routinesPopulatedDates: JSON.parse(localStorage.getItem('neon_planner_populated_dates') || '{}'),
-        preferences: {
-          theme: localStorage.getItem('neon_planner_theme') || 'dark',
-          fontSize: localStorage.getItem('neon_planner_font_size') || '16',
-          dateSize: localStorage.getItem('neon_planner_date_size') || '14',
-          bgHue: localStorage.getItem('neon_planner_bg_hue') || '0',
-          bgIntensity: localStorage.getItem('neon_planner_bg_intensity') || '0',
-          accentColor: localStorage.getItem('neon_planner_accent_color') || 'indigo',
-          accentIntensity: localStorage.getItem('neon_planner_accent_intensity') || '100',
-          showCalendar: localStorage.getItem('neon_planner_show_calendar') || 'true',
-          showTodos: localStorage.getItem('neon_planner_show_todos') || 'true',
-          showRecords: localStorage.getItem('neon_planner_show_records') || 'true',
-          showAnalytics: localStorage.getItem('neon_planner_show_analytics') || 'false',
-          showSearch: localStorage.getItem('neon_planner_show_search') || 'true',
-          buttonOrder: localStorage.getItem('neon_planner_button_order') || ''
-        },
-        lastModified: parseInt(localStorage.getItem('neon_planner_last_modified') || '0', 10) || Date.now()
-      };
-
-      const boundary = 'neon_planner_multipart_boundary';
-      const delimiter = `--${boundary}\r\n`;
-      const nextDelimiter = `\r\n--${boundary}\r\n`;
-      const closeDelimiter = `\r\n--${boundary}--`;
-
-      const metadata = {
-        name: 'neon_planner_backup.json',
-        mimeType: 'application/json',
-        parents: ['appDataFolder']
-      };
-
-      const parts = [
-        delimiter,
-        'Content-Type: application/json; charset=UTF-8\r\n\r\n',
-        JSON.stringify(metadata),
-        nextDelimiter,
-        'Content-Type: application/json; charset=UTF-8\r\n\r\n',
-        JSON.stringify(backupData),
-        closeDelimiter
-      ];
-
-      const blob = new Blob(parts, { type: `multipart/related; boundary=${boundary}` });
-
-      const createUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime';
-      const createRes = await fetch(createUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${gdriveAccessToken}`
-        },
-        body: blob
-      });
-      if (!createRes.ok) {
-        const errText = await createRes.text();
-        throw new Error('새 파일 업로드 실패: ' + createRes.status + ' - ' + errText);
-      }
-      const createData = await createRes.json();
-      if (createData.id) {
-        localStorage.setItem('neon_planner_gdrive_file_id', createData.id);
-      }
-      if (createData.modifiedTime) {
-        localStorage.setItem('neon_planner_gdrive_file_modifiedTime', createData.modifiedTime);
-      }
-
-      if (statusBadge) {
-        statusBadge.textContent = '연결 완료 (자동 동기화)';
-        statusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-        statusBadge.style.color = '#10b981';
-        statusBadge.style.borderColor = '#10b981';
-      }
-
-      alert('🔑 구글 드라이브 연동이 완료되었습니다!\n현재 플래너 데이터가 클라우드에 안전하게 첫 백업되었습니다.');
     }
+
+    triggerGDriveAutoSync();
+    
+    setTimeout(() => {
+      alert('구글 연동 및 자동 복원/백업이 완료되었습니다. 변경사항 적용을 위해 새로고침합니다.');
+      window.location.reload();
+    }, 1500);
+
   } catch (e) {
     console.error('Auto restore/backup failed:', e);
-    alert('구글 연동 중 오류가 발생했습니다: ' + e.message);
-  } finally {
-    isSyncingInProgress = false;
-    if (localStorage.getItem('neon_planner_gdrive_connected') === 'true') {
-      if (gdrivePollInterval) clearInterval(gdrivePollInterval);
-      gdrivePollInterval = setInterval(autoSyncWithDrive, 3000);
-    }
+    alert('구글 연동은 완료되었으나 자동 복원/백업 중 오류가 발생했습니다.');
+    window.location.reload();
   }
 }
 
@@ -1474,10 +1353,10 @@ function showSyncToast() {
 }
 
 async function autoSyncWithDrive() {
-  if (isSyncingInProgress) return;
-  if (!gdriveAccessToken) return;
   const statusBadge = document.getElementById('gdrive-status-badge');
   try {
+    // Do not update UI to 'Checking...' on every poll to keep it silent and seamless
+
     let existingFile = null;
     let fileId = localStorage.getItem('neon_planner_gdrive_file_id');
 
@@ -1495,19 +1374,6 @@ async function autoSyncWithDrive() {
       } else if (getRes.status === 404) {
         fileId = null;
         localStorage.removeItem('neon_planner_gdrive_file_id');
-      } else if (getRes.status === 401 || getRes.status === 403) {
-        if (statusBadge) {
-          statusBadge.innerHTML = '⚠️ 세션 만료 <span style="text-decoration:underline;">(클릭하여 연장)</span>';
-          statusBadge.style.background = 'rgba(239, 68, 68, 0.15)';
-          statusBadge.style.color = '#ef4444';
-          statusBadge.style.borderColor = '#ef4444';
-          statusBadge.style.cursor = 'pointer';
-          statusBadge.onclick = () => {
-            const loginBtn = document.getElementById('btn-gdrive-login');
-            if (loginBtn) loginBtn.click();
-          };
-        }
-        return;
       }
     }
 
@@ -1578,56 +1444,57 @@ async function autoSyncWithDrive() {
     const driveModified = parseInt(restoreData.lastModified || '0', 10);
     const localModified = parseInt(localStorage.getItem('neon_planner_last_modified') || '0', 10);
 
-    // 구글 드라이브 파일의 수정 시각이 변경된 경우 클라우드의 최신 데이터를 로컬로 안전하게 다운로드/적용
-    if (driveModified >= localModified || !lastSeenTime) {
-      isSyncingInProgress = true;
-      try {
-        if (restoreData.todos) localStorage.setItem('neon_planner_todos', JSON.stringify(restoreData.todos));
-        if (restoreData.diaries) localStorage.setItem('neon_planner_diaries', JSON.stringify(restoreData.diaries));
-        if (restoreData.categories) localStorage.setItem('neon_planner_categories', JSON.stringify(restoreData.categories));
-        if (restoreData.tabIcons) localStorage.setItem('neon_planner_tab_icons', JSON.stringify(restoreData.tabIcons));
-        if (restoreData.appTitle) localStorage.setItem('neon_planner_app_title', restoreData.appTitle);
-        if (restoreData.ddays) localStorage.setItem('neon_planner_ddays', JSON.stringify(restoreData.ddays));
-        if (restoreData.routines) localStorage.setItem('neon_planner_routines', JSON.stringify(restoreData.routines));
-        if (restoreData.routinesPopulatedDates) localStorage.setItem('neon_planner_populated_dates', JSON.stringify(restoreData.routinesPopulatedDates));
-        
-        if (restoreData.preferences) {
-          const prefs = restoreData.preferences;
-          if (prefs.theme) localStorage.setItem('neon_planner_theme', prefs.theme);
-          if (prefs.fontSize) localStorage.setItem('neon_planner_font_size', prefs.fontSize);
-          if (prefs.dateSize) localStorage.setItem('neon_planner_date_size', prefs.dateSize);
-          if (prefs.bgHue) localStorage.setItem('neon_planner_bg_hue', prefs.bgHue);
-          if (prefs.bgIntensity) localStorage.setItem('neon_planner_bg_intensity', prefs.bgIntensity);
-          if (prefs.accentColor) localStorage.setItem('neon_planner_accent_color', prefs.accentColor);
-          if (prefs.accentIntensity) localStorage.setItem('neon_planner_accent_intensity', prefs.accentIntensity);
-          if (prefs.showCalendar) localStorage.setItem('neon_planner_show_calendar', prefs.showCalendar);
-          if (prefs.showTodos) localStorage.setItem('neon_planner_show_todos', prefs.showTodos);
-          if (prefs.showRecords) localStorage.setItem('neon_planner_show_records', prefs.showRecords);
-          if (prefs.showAnalytics) localStorage.setItem('neon_planner_show_analytics', prefs.showAnalytics);
-          if (prefs.showSearch) localStorage.setItem('neon_planner_show_search', prefs.showSearch);
-          if (prefs.buttonOrder) localStorage.setItem('neon_planner_button_order', prefs.buttonOrder);
-        }
-        localStorage.setItem('neon_planner_last_modified', (driveModified || Date.now()).toString());
-        
-        loadFromLocalStorage();
-        updateUI();
-        
-        showSyncToast();
-        
-        if (statusBadge) {
-          statusBadge.textContent = '✨ 자동 복원 완료 (최신화)';
-          statusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-          statusBadge.style.color = '#10b981';
-          statusBadge.style.borderColor = '#10b981';
-          setTimeout(() => {
-            statusBadge.textContent = '연결 완료 (자동 동기화)';
-          }, 5000);
-        }
-      } finally {
-        isSyncingInProgress = false;
+    if (driveModified > localModified) {
+      if (restoreData.todos) localStorage.setItem('neon_planner_todos', JSON.stringify(restoreData.todos));
+      if (restoreData.diaries) localStorage.setItem('neon_planner_diaries', JSON.stringify(restoreData.diaries));
+      if (restoreData.categories) localStorage.setItem('neon_planner_categories', JSON.stringify(restoreData.categories));
+      if (restoreData.tabIcons) localStorage.setItem('neon_planner_tab_icons', JSON.stringify(restoreData.tabIcons));
+      if (restoreData.appTitle) localStorage.setItem('neon_planner_app_title', restoreData.appTitle);
+      if (restoreData.ddays) localStorage.setItem('neon_planner_ddays', JSON.stringify(restoreData.ddays));
+      if (restoreData.routines) localStorage.setItem('neon_planner_routines', JSON.stringify(restoreData.routines));
+      if (restoreData.routinesPopulatedDates) localStorage.setItem('neon_planner_populated_dates', JSON.stringify(restoreData.routinesPopulatedDates));
+      
+      if (restoreData.preferences) {
+        const prefs = restoreData.preferences;
+        if (prefs.theme) localStorage.setItem('neon_planner_theme', prefs.theme);
+        if (prefs.fontSize) localStorage.setItem('neon_planner_font_size', prefs.fontSize);
+        if (prefs.dateSize) localStorage.setItem('neon_planner_date_size', prefs.dateSize);
+        if (prefs.bgHue) localStorage.setItem('neon_planner_bg_hue', prefs.bgHue);
+        if (prefs.bgIntensity) localStorage.setItem('neon_planner_bg_intensity', prefs.bgIntensity);
+        if (prefs.accentColor) localStorage.setItem('neon_planner_accent_color', prefs.accentColor);
+        if (prefs.accentIntensity) localStorage.setItem('neon_planner_accent_intensity', prefs.accentIntensity);
+        if (prefs.showCalendar) localStorage.setItem('neon_planner_show_calendar', prefs.showCalendar);
+        if (prefs.showTodos) localStorage.setItem('neon_planner_show_todos', prefs.showTodos);
+        if (prefs.showRecords) localStorage.setItem('neon_planner_show_records', prefs.showRecords);
+        if (prefs.showAnalytics) localStorage.setItem('neon_planner_show_analytics', prefs.showAnalytics);
+        if (prefs.showSearch) localStorage.setItem('neon_planner_show_search', prefs.showSearch);
+        if (prefs.buttonOrder) localStorage.setItem('neon_planner_button_order', prefs.buttonOrder);
       }
-    } else {
+      localStorage.setItem('neon_planner_last_modified', driveModified.toString());
+      
+      loadFromLocalStorage();
+      updateUI();
+      
+      showSyncToast();
+      
+      if (statusBadge) {
+        statusBadge.textContent = '✨ 자동 복원 완료 (최신화)';
+        statusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        statusBadge.style.color = '#10b981';
+        statusBadge.style.borderColor = '#10b981';
+        setTimeout(() => {
+          statusBadge.textContent = '연결 완료 (자동 동기화)';
+        }, 5000);
+      }
+    } else if (localModified > driveModified) {
       triggerGDriveAutoSync();
+    } else {
+      if (statusBadge) {
+        statusBadge.textContent = '연결 완료 (자동 동기화)';
+        statusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        statusBadge.style.color = '#10b981';
+        statusBadge.style.borderColor = '#10b981';
+      }
     }
   } catch (err) {
     console.error('Auto sync check failed:', err);
@@ -3470,15 +3337,19 @@ function setupEventListeners() {
       const memoInput = document.getElementById('todo-edit-modal-memo');
       const memoValue = memoInput ? memoInput.value.trim() : '';
 
+      const importantInput = document.getElementById('todo-edit-modal-important');
+      const isImportantVal = importantInput ? importantInput.checked : Boolean(todo.isImportant);
+
       const todo = state.todos[dateKey].find(t => t.id === editingTodoId);
       if (todo) {
-        // Save if anything changed (text, category, time, date, or memo)
-        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey || (todo.memo || '') !== memoValue) {
+        // Save if anything changed (text, category, time, date, memo, or importance)
+        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey || (todo.memo || '') !== memoValue || Boolean(todo.isImportant) !== isImportantVal) {
           pushToHistory();
           todo.text = text;
           todo.category = modalSelectedCategory;
           todo.time = timeValue;
           todo.memo = memoValue;
+          todo.isImportant = isImportantVal;
 
           // If date has changed, move the todo item
           if (targetDateKey !== dateKey) {
@@ -3848,8 +3719,6 @@ function setupEventListeners() {
           tabIcons: JSON.parse(localStorage.getItem('neon_planner_tab_icons') || '{}'),
           appTitle: localStorage.getItem('neon_planner_app_title') || '',
           ddays: JSON.parse(localStorage.getItem('neon_planner_ddays') || '[]'),
-          routines: JSON.parse(localStorage.getItem('neon_planner_routines') || '[]'),
-          routinesPopulatedDates: JSON.parse(localStorage.getItem('neon_planner_populated_dates') || '{}'),
           preferences: {
             theme: localStorage.getItem('neon_planner_theme') || 'dark',
             fontSize: localStorage.getItem('neon_planner_font_size') || '16',
@@ -3868,7 +3737,7 @@ function setupEventListeners() {
           lastModified: parseInt(localStorage.getItem('neon_planner_last_modified') || '0', 10)
         };
 
-        const searchUrl = "https://www.googleapis.com/drive/v3/files?q=name='neon_planner_backup.json'+and+trashed=false&spaces=appDataFolder&fields=files(id,modifiedTime)";
+        const searchUrl = "https://www.googleapis.com/drive/v3/files?q=name='neon_planner_backup.json'+and+trashed=false&spaces=appDataFolder&fields=files(id)";
         const searchRes = await fetch(searchUrl, {
           headers: { 'Authorization': `Bearer ${gdriveAccessToken}` }
         });
@@ -3882,8 +3751,7 @@ function setupEventListeners() {
         const existingFile = searchData.files && searchData.files[0];
 
         if (existingFile) {
-          localStorage.setItem('neon_planner_gdrive_file_id', existingFile.id);
-          const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=media&fields=modifiedTime`;
+          const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=media`;
           const updateRes = await fetch(updateUrl, {
             method: 'PATCH',
             headers: {
@@ -3893,10 +3761,6 @@ function setupEventListeners() {
             body: JSON.stringify(backupData)
           });
           if (!updateRes.ok) throw new Error('파일 덮어쓰기 실패');
-          const updateData = await updateRes.json();
-          if (updateData.modifiedTime) {
-            localStorage.setItem('neon_planner_gdrive_file_modifiedTime', updateData.modifiedTime);
-          }
         } else {
           const boundary = 'neon_planner_multipart_boundary';
           const delimiter = `--${boundary}\r\n`;
@@ -3921,7 +3785,7 @@ function setupEventListeners() {
 
           const blob = new Blob(parts, { type: `multipart/related; boundary=${boundary}` });
 
-          const createUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime';
+          const createUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
           const createRes = await fetch(createUrl, {
             method: 'POST',
             headers: {
@@ -3932,13 +3796,6 @@ function setupEventListeners() {
           if (!createRes.ok) {
             const errText = await createRes.text();
             throw new Error('새 파일 업로드 실패: ' + createRes.status + ' - ' + errText);
-          }
-          const createData = await createRes.json();
-          if (createData.id) {
-            localStorage.setItem('neon_planner_gdrive_file_id', createData.id);
-          }
-          if (createData.modifiedTime) {
-            localStorage.setItem('neon_planner_gdrive_file_modifiedTime', createData.modifiedTime);
           }
         }
 
@@ -3960,7 +3817,7 @@ function setupEventListeners() {
         return;
       }
 
-      if (!confirm('정말로 구글 드라이브에서 백업 데이터를 받아와 덮어씌우시겠습니까?\n현재 로컬 데이터는 모두 클라우드 내용으로 교체됩니다.')) {
+      if (!confirm('정말로 구글 드라이브에서 백업 데이터를 받아와 덮어씌우시겠습니까?\n현재 로컬 데이터는 모두 유실됩니다.')) {
         return;
       }
 
@@ -3968,7 +3825,7 @@ function setupEventListeners() {
       gdriveRestoreBtn.textContent = '📥 복원 중...';
 
       try {
-        const searchUrl = "https://www.googleapis.com/drive/v3/files?q=name='neon_planner_backup.json'+and+trashed=false&spaces=appDataFolder&fields=files(id,modifiedTime)";
+        const searchUrl = "https://www.googleapis.com/drive/v3/files?q=name='neon_planner_backup.json'+and+trashed=false&spaces=appDataFolder&fields=files(id)";
         const searchRes = await fetch(searchUrl, {
           headers: { 'Authorization': `Bearer ${gdriveAccessToken}` }
         });
@@ -4000,8 +3857,6 @@ function setupEventListeners() {
         if (restoreData.tabIcons) localStorage.setItem('neon_planner_tab_icons', JSON.stringify(restoreData.tabIcons));
         if (restoreData.appTitle) localStorage.setItem('neon_planner_app_title', restoreData.appTitle);
         if (restoreData.ddays) localStorage.setItem('neon_planner_ddays', JSON.stringify(restoreData.ddays));
-        if (restoreData.routines) localStorage.setItem('neon_planner_routines', JSON.stringify(restoreData.routines));
-        if (restoreData.routinesPopulatedDates) localStorage.setItem('neon_planner_populated_dates', JSON.stringify(restoreData.routinesPopulatedDates));
         
         if (restoreData.preferences) {
           const prefs = restoreData.preferences;
@@ -4020,10 +3875,6 @@ function setupEventListeners() {
           if (prefs.buttonOrder) localStorage.setItem('neon_planner_button_order', prefs.buttonOrder);
         }
 
-        localStorage.setItem('neon_planner_gdrive_file_id', existingFile.id);
-        if (existingFile.modifiedTime) {
-          localStorage.setItem('neon_planner_gdrive_file_modifiedTime', existingFile.modifiedTime);
-        }
         localStorage.setItem('neon_planner_last_modified', restoreData.lastModified ? restoreData.lastModified.toString() : Date.now().toString());
 
         alert('구글 드라이브 백업 데이터 복원에 성공했습니다! 변경사항 적용을 위해 화면을 새로고침합니다.');
@@ -4110,6 +3961,8 @@ function handleAddTodo() {
   }
 
   const isRoutine = routineCheckbox.checked;
+  const importantCheckbox = document.getElementById('important-checkbox');
+  const isImportant = (importantCheckbox && importantCheckbox.checked) || Boolean(parsedResult.isImportant);
   const timeValue = parsedResult.time || currentSelectedTime;
 
   const newTodo = {
@@ -4118,6 +3971,7 @@ function handleAddTodo() {
     category: state.selectedCategory,
     completed: false,
     isRoutine: isRoutine,
+    isImportant: isImportant,
     time: timeValue
   };
 
@@ -4136,6 +3990,7 @@ function handleAddTodo() {
   // Reset inputs
   todoInputField.value = '';
   routineCheckbox.checked = false; // Reset checkbox
+  if (importantCheckbox) importantCheckbox.checked = false; // Reset important checkbox
 
   // Reset custom time picker state
   currentSelectedTime = '';
@@ -4180,6 +4035,21 @@ function toggleTodo(todoId) {
   updateUI();
 }
 
+// Toggle Todo Important / Starred state
+function toggleTodoImportant(todoId, dateKeyParam = null) {
+  const dateKey = dateKeyParam || state.selectedDate;
+  if (!state.todos[dateKey]) return;
+
+  const todo = state.todos[dateKey].find(t => t.id === todoId);
+  if (!todo) return;
+
+  pushToHistory();
+  todo.isImportant = !todo.isImportant;
+
+  saveTodos();
+  updateUI();
+}
+
 // Open Todo Edit Modal (Popup)
 function openTodoEditModal(todoId) {
   const dateKey = state.selectedDate;
@@ -4201,6 +4071,12 @@ function openTodoEditModal(todoId) {
   const memoInput = document.getElementById('todo-edit-modal-memo');
   if (memoInput) {
     memoInput.value = todo.memo || '';
+  }
+
+  // Fill important checkbox
+  const importantInput = document.getElementById('todo-edit-modal-important');
+  if (importantInput) {
+    importantInput.checked = Boolean(todo.isImportant);
   }
 
   // Fill custom time selectors
@@ -4346,6 +4222,11 @@ function handleDeleteCategory(catId) {
   // If the deleted category was selected, change selection to 'other'
   if (state.selectedCategory === catId) {
     state.selectedCategory = 'other';
+  }
+
+  // If the deleted category was active in the filter tabs, reset to 'all'
+  if (state.todoFilterCategory === catId) {
+    state.todoFilterCategory = 'all';
   }
 
   // Update UI
@@ -4599,6 +4480,7 @@ function updateUI() {
 
   renderCalendar();
   renderCategorySelector();
+  renderCategoryFilterTabs();
   renderTodos();
   applyCopyModeBanner();
   renderDiary();
@@ -4607,6 +4489,103 @@ function updateUI() {
   applyDdaysVisibility();
   renderSearchResultsSection();
   applyLayoutSectionOrder();
+}
+
+// Handle selection/toggle of category filter tab
+function handleSelectTodoFilterCategory(catId) {
+  if (state.todoFilterCategory === catId) {
+    // If the active category tab is clicked again, toggle back to 'all'
+    state.todoFilterCategory = 'all';
+  } else {
+    state.todoFilterCategory = catId;
+    // When switching to a specific category tab, sync selectedCategory for add form
+    if (catId !== 'all' && state.categories[catId]) {
+      state.selectedCategory = catId;
+    }
+  }
+  updateUI();
+}
+
+// Render Todo Category Filter Tabs Bar
+function renderCategoryFilterTabs() {
+  const container = document.getElementById('todo-cat-filter-tabs');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const currentDayTodos = (state.todos && state.todos[state.selectedDate]) ? state.todos[state.selectedDate] : [];
+  const totalCount = currentDayTodos.length;
+  const catCounts = {};
+  currentDayTodos.forEach(t => {
+    const cat = t.category || 'other';
+    catCounts[cat] = (catCounts[cat] || 0) + 1;
+  });
+
+  const activeFilter = state.todoFilterCategory || 'all';
+
+  // 1. "전체" (All) Tab
+  const allTab = document.createElement('button');
+  allTab.type = 'button';
+  allTab.className = `todo-cat-filter-tab ${activeFilter === 'all' ? 'active' : ''}`;
+  allTab.dataset.category = 'all';
+  allTab.setAttribute('role', 'tab');
+  allTab.setAttribute('aria-selected', activeFilter === 'all' ? 'true' : 'false');
+  allTab.title = '전체 할 일 보기';
+  allTab.innerHTML = `
+    <span class="tab-label">전체</span>
+    <span class="tab-badge">${totalCount}</span>
+  `;
+  allTab.addEventListener('click', () => {
+    handleSelectTodoFilterCategory('all');
+  });
+  container.appendChild(allTab);
+
+  // 2. Individual Category Tabs
+  Object.keys(state.categories).forEach(catId => {
+    const cat = state.categories[catId];
+    const count = catCounts[catId] || 0;
+    const isActive = activeFilter === catId;
+
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = `todo-cat-filter-tab ${isActive ? 'active' : ''}`;
+    tab.dataset.category = catId;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    tab.title = `${cat.label} 탭의 할 일만 보기 (클릭 시 토글)`;
+
+    if (cat.color) {
+      tab.style.setProperty('--cat-color', cat.color);
+      const rgb = hexToRgb(cat.color);
+      if (rgb) {
+        tab.style.setProperty('--cat-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+      }
+    }
+
+    const dot = document.createElement('span');
+    dot.className = 'cat-filter-dot';
+    dot.style.backgroundColor = cat.color || 'var(--accent-color)';
+    if (isActive) {
+      dot.style.boxShadow = `0 0 6px ${cat.color || 'var(--accent-color)'}`;
+    }
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'tab-label';
+    labelSpan.textContent = cat.label;
+
+    const badgeSpan = document.createElement('span');
+    badgeSpan.className = 'tab-badge';
+    badgeSpan.textContent = count;
+
+    tab.appendChild(dot);
+    tab.appendChild(labelSpan);
+    tab.appendChild(badgeSpan);
+
+    tab.addEventListener('click', () => {
+      handleSelectTodoFilterCategory(catId);
+    });
+
+    container.appendChild(tab);
+  });
 }
 
 // Render Dynamic Category Selection Pills
@@ -5153,22 +5132,27 @@ function renderTimeline() {
       const todoListContainer = document.createElement('div');
       todoListContainer.className = 'timeline-todo-list';
 
-      // Sort todos: uncompleted first, then completed last. Within groups, sort by time.
+      // Sort todos: uncompleted first, then completed last. Within groups, important first, then by time.
       const sortedTodos = [...todos].sort((a, b) => {
         if (a.completed !== b.completed) {
           return a.completed ? 1 : -1;
+        }
+        const isImpA = Boolean(a.isImportant);
+        const isImpB = Boolean(b.isImportant);
+        if (isImpA !== isImpB) {
+          return isImpA ? -1 : 1;
         }
         if (a.time && !b.time) return -1;
         if (!a.time && b.time) return 1;
         if (a.time && b.time) {
           return a.time.localeCompare(b.time);
         }
-        return 0;
+        return a.id - b.id;
       });
 
       sortedTodos.forEach(todo => {
         const item = document.createElement('div');
-        item.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+        item.className = `todo-item ${todo.completed ? 'completed' : ''} ${todo.isImportant ? 'is-important' : ''}`;
 
         const itemLeft = document.createElement('div');
         itemLeft.className = 'todo-item-left';
@@ -5235,6 +5219,14 @@ function renderTimeline() {
         // Meta Div for Badges
         const metaDiv = document.createElement('div');
         metaDiv.className = 'todo-item-meta';
+
+        // Important Tag
+        if (todo.isImportant) {
+          const impBadge = document.createElement('span');
+          impBadge.className = 'important-badge';
+          impBadge.innerHTML = '⭐ 중요';
+          metaDiv.appendChild(impBadge);
+        }
 
         // Category Tag
         if (todo.category && state.categories[todo.category]) {
@@ -5879,7 +5871,9 @@ function createCell(day, dateKey, isOtherMonth = false, isToday = false) {
             text: copyingTodo.text,
             category: copyingTodo.category,
             completed: false,
-            isRoutine: copyingTodo.isRoutine
+            isRoutine: copyingTodo.isRoutine,
+            isImportant: Boolean(copyingTodo.isImportant),
+            time: copyingTodo.time || ''
           });
           saveTodos();
           updateUI();
@@ -6683,13 +6677,22 @@ function parseNaturalLanguageTodo(inputText) {
     }
   }
 
+  // 3. Importance keywords (⭐, ★, [중요], 중요:)
+  let isImportant = false;
+  const importantRegex = /(?:^|\s)(?:⭐|★|\[중요\]|중요:)\s*/i;
+  if (importantRegex.test(text)) {
+    isImportant = true;
+    text = text.replace(importantRegex, ' ').trim();
+  }
+
   // Clean up any double spaces leftover
   text = text.replace(/\s+/g, ' ').trim();
 
   return {
     cleanedText: text,
     dateKey: parsedDateKey,
-    time: parsedTime
+    time: parsedTime,
+    isImportant: isImportant
   };
 }
 
@@ -6762,15 +6765,18 @@ function renderTodos() {
   }
 
   const inputContainer = document.querySelector('.todo-input-container');
+  const filterContainer = document.getElementById('todo-cat-filter-container');
   const toggleBtn = document.getElementById('btn-toggle-todos');
   if (toggleBtn) {
     if (state.showTodos) {
       toggleBtn.classList.add('active-view');
       if (inputContainer) inputContainer.classList.remove('hidden');
+      if (filterContainer) filterContainer.classList.remove('hidden');
       if (todoItemsList) todoItemsList.classList.remove('hidden');
     } else {
       toggleBtn.classList.remove('active-view');
       if (inputContainer) inputContainer.classList.add('hidden');
+      if (filterContainer) filterContainer.classList.add('hidden');
       if (todoItemsList) todoItemsList.classList.add('hidden');
     }
   }
@@ -6795,6 +6801,13 @@ function renderTodos() {
     dayTodos = currentDayTodos.map(todo => ({ ...todo, dateKey: state.selectedDate }));
   }
 
+  // Filter by category tab if not 'all'
+  const filterCat = state.todoFilterCategory || 'all';
+  let filteredTodos = dayTodos;
+  if (filterCat !== 'all') {
+    filteredTodos = dayTodos.filter(todo => (todo.category || 'other') === filterCat);
+  }
+
   if (dayTodos.length === 0) {
     const emptyDiv = document.createElement('div');
     emptyDiv.classList.add('empty-state');
@@ -6803,11 +6816,59 @@ function renderTodos() {
     return;
   }
 
-  // Sort: Uncompleted first, completed last. Keep original creation order within groups.
-  // Sort: Uncompleted first, completed last. Then timed items first (chronologically), untimed last.
-  const sortedTodos = [...dayTodos].sort((a, b) => {
+  if (filteredTodos.length === 0) {
+    const activeCatObj = state.categories[filterCat];
+    const activeCatLabel = activeCatObj ? activeCatObj.label : '선택한 카테고리';
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'todo-filter-empty-state';
+    emptyDiv.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 1.1rem;">🎯</span>
+        <span><strong>'${escapeHtml(activeCatLabel)}'</strong> 탭에 등록된 할 일이 없습니다.</span>
+      </div>
+      <div class="empty-actions">
+        <button type="button" class="empty-btn primary" id="btn-quick-add-to-cat">
+          ➕ '${escapeHtml(activeCatLabel)}' 할 일 추가하기
+        </button>
+        <button type="button" class="empty-btn" id="btn-show-all-todos-filter">
+          📋 전체 할 일 보기
+        </button>
+      </div>
+    `;
+    todoItemsList.appendChild(emptyDiv);
+
+    const btnQuickAdd = emptyDiv.querySelector('#btn-quick-add-to-cat');
+    if (btnQuickAdd) {
+      btnQuickAdd.addEventListener('click', () => {
+        state.selectedCategory = filterCat;
+        if (todoInputField) {
+          todoInputField.focus();
+          const todoInputContainer = document.querySelector('.todo-input-container');
+          if (todoInputContainer) todoInputContainer.classList.add('expanded');
+        }
+      });
+    }
+    const btnShowAll = emptyDiv.querySelector('#btn-show-all-todos-filter');
+    if (btnShowAll) {
+      btnShowAll.addEventListener('click', () => {
+        state.todoFilterCategory = 'all';
+        updateUI();
+      });
+    }
+    return;
+  }
+
+  // Sort: Uncompleted first, completed last. Important (isImportant: true) items at the very top.
+  // Then timed items first (chronologically), untimed last.
+  const sortedTodos = [...filteredTodos].sort((a, b) => {
     if (a.completed !== b.completed) {
       return a.completed ? 1 : -1;
+    }
+
+    const isImpA = Boolean(a.isImportant);
+    const isImpB = Boolean(b.isImportant);
+    if (isImpA !== isImpB) {
+      return isImpA ? -1 : 1;
     }
     
     const timeA = a.time || "";
@@ -6827,6 +6888,9 @@ function renderTodos() {
     item.setAttribute('data-todo-id', todo.id);
     if (todo.completed) {
       item.classList.add('completed');
+    }
+    if (todo.isImportant) {
+      item.classList.add('is-important');
     }
 
     const itemLeft = document.createElement('div');
@@ -6916,6 +6980,14 @@ function renderTodos() {
     const metaDiv = document.createElement('div');
     metaDiv.classList.add('todo-item-meta');
 
+    // Important badge
+    if (todo.isImportant) {
+      const importantBadge = document.createElement('span');
+      importantBadge.classList.add('important-badge');
+      importantBadge.innerHTML = '⭐ 중요';
+      metaDiv.appendChild(importantBadge);
+    }
+
     // Routine tag
     if (todo.isRoutine) {
       const routineBadge = document.createElement('span');
@@ -6980,6 +7052,18 @@ function renderTodos() {
     const actionBtns = document.createElement('div');
     actionBtns.classList.add('todo-action-btns');
 
+    // Star / Important Button
+    const starBtn = document.createElement('button');
+    starBtn.type = 'button';
+    starBtn.className = `todo-star-btn ${todo.isImportant ? 'active' : ''}`;
+    starBtn.innerHTML = todo.isImportant ? '⭐' : '☆';
+    starBtn.title = todo.isImportant ? '중요 표시 해제' : '중요 표시 (상단 고정)';
+    starBtn.ariaLabel = todo.isImportant ? '중요 표시 해제' : '중요 표시';
+    starBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTodoImportant(todo.id, todo.dateKey || state.selectedDate);
+    });
+
     // Edit button
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
@@ -6999,6 +7083,7 @@ function renderTodos() {
     deleteBtn.ariaLabel = '할 일 삭제';
     deleteBtn.addEventListener('click', () => deleteTodo(todo.id, todo.text, todo.isRoutine));
 
+    actionBtns.appendChild(starBtn);
     actionBtns.appendChild(editBtn);
     actionBtns.appendChild(deleteBtn);
 

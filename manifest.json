@@ -1,0 +1,16 @@
+{
+  "name": "플래너",
+  "short_name": "플래너",
+  "description": "카테고리별 할 일 관리와 달력이 연동되는 모던하고 직관적인 투두 플래너 웹 애플리케이션입니다.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

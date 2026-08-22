@@ -51,12 +51,12 @@
         <button type="button" id="btn-toggle-timeline" class="header-toggle-btn" title="⏳ 타임라인 보이기/숨기기" data-section-id="timeline">⏳ <span class="btn-text">타임라인</span></button>
         <button type="button" id="btn-toggle-ddays" class="header-toggle-btn" title="🎉 디데이/기념일 보이기/숨기기" data-section-id="ddays">🎉 <span class="btn-text">디데이</span></button>
         <button type="button" id="btn-toggle-analytics" class="header-toggle-btn" title="📊 통계/분석 보이기/숨기기" data-section-id="analytics">📊 <span class="btn-text">분석</span></button>
-        <button type="button" id="btn-toggle-control-panel" class="header-toggle-btn active-view" title="⚙️ 테마/설정 보이기/숨기기" data-section-id="settings">⚙️ <span class="btn-text">설정</span></button>
+        <button type="button" id="btn-toggle-control-panel" class="header-toggle-btn" title="⚙️ 테마/설정 보이기/숨기기" data-section-id="settings">⚙️ <span class="btn-text">설정</span></button>
       </div>
     </header>
 
     <!-- Top Controller Bar -->
-    <div class="control-panel" id="control-panel">
+    <div class="control-panel collapsed" id="control-panel">
       <div class="control-group">
         <span class="control-label">화면 테마:</span>
         <button type="button" class="ctrl-btn active" id="btn-theme-dark">어둡게</button>
@@ -343,6 +343,8 @@
               </div>
             </div>
           </div>
+        </div>
+
         <!-- Todo Category Filter Tabs -->
         <div class="todo-cat-filter-container" id="todo-cat-filter-container">
           <div class="todo-cat-filter-tabs" id="todo-cat-filter-tabs" role="tablist" aria-label="카테고리별 할일 필터">

@@ -4499,7 +4499,7 @@ function handleSelectTodoFilterCategory(catId) {
   } else {
     state.todoFilterCategory = catId;
     // When switching to a specific category tab, sync selectedCategory for add form
-    if (catId !== 'all' && state.categories[catId]) {
+    if (catId !== 'all' && catId !== 'routine' && state.categories[catId]) {
       state.selectedCategory = catId;
     }
   }
@@ -4514,6 +4514,7 @@ function renderCategoryFilterTabs() {
 
   const currentDayTodos = (state.todos && state.todos[state.selectedDate]) ? state.todos[state.selectedDate] : [];
   const totalCount = currentDayTodos.length;
+  const routineCount = currentDayTodos.filter(t => Boolean(t.isRoutine)).length;
   const catCounts = {};
   currentDayTodos.forEach(t => {
     let cat = t.category || 'other';
@@ -4543,7 +4544,40 @@ function renderCategoryFilterTabs() {
   });
   container.appendChild(allTab);
 
-  // 2. Individual Category Tabs
+  // 2. "루틴" (Routine) Tab
+  const routineTab = document.createElement('button');
+  routineTab.type = 'button';
+  routineTab.className = `todo-cat-filter-tab ${activeFilter === 'routine' ? 'active' : ''}`;
+  routineTab.dataset.category = 'routine';
+  routineTab.setAttribute('role', 'tab');
+  routineTab.setAttribute('aria-selected', activeFilter === 'routine' ? 'true' : 'false');
+  routineTab.title = '루틴(매일 반복) 할 일만 보기 (클릭 시 토글)';
+  
+  const routineDot = document.createElement('span');
+  routineDot.className = 'cat-filter-dot';
+  routineDot.style.backgroundColor = '#a855f7';
+  if (activeFilter === 'routine') {
+    routineDot.style.boxShadow = '0 0 6px #a855f7';
+  }
+
+  const routineLabelSpan = document.createElement('span');
+  routineLabelSpan.className = 'tab-label';
+  routineLabelSpan.innerHTML = '🔄 루틴';
+
+  const routineBadgeSpan = document.createElement('span');
+  routineBadgeSpan.className = 'tab-badge';
+  routineBadgeSpan.textContent = routineCount;
+
+  routineTab.appendChild(routineDot);
+  routineTab.appendChild(routineLabelSpan);
+  routineTab.appendChild(routineBadgeSpan);
+
+  routineTab.addEventListener('click', () => {
+    handleSelectTodoFilterCategory('routine');
+  });
+  container.appendChild(routineTab);
+
+  // 3. Individual Category Tabs
   Object.keys(state.categories).forEach(catId => {
     const cat = state.categories[catId];
     const count = catCounts[catId] || 0;
@@ -4602,7 +4636,7 @@ function renderCategorySelector() {
   Object.keys(state.categories).forEach(catId => {
     const cat = state.categories[catId];
     const option = document.createElement('span');
-    const isSelected = (catId === state.selectedCategory) || (state.todoFilterCategory !== 'all' && catId === state.todoFilterCategory);
+    const isSelected = (catId === state.selectedCategory) || (state.todoFilterCategory !== 'all' && state.todoFilterCategory !== 'routine' && catId === state.todoFilterCategory);
     option.className = `cat-option ${isSelected ? 'selected' : ''}`;
     
     if (cat.class) {
@@ -6797,10 +6831,12 @@ function renderTodos() {
     dayTodos = currentDayTodos.map(todo => ({ ...todo, dateKey: state.selectedDate }));
   }
 
-  // Filter by category tab if not 'all'
+  // Filter by category tab or routine if not 'all'
   const filterCat = state.todoFilterCategory || 'all';
   let filteredTodos = dayTodos;
-  if (filterCat !== 'all') {
+  if (filterCat === 'routine') {
+    filteredTodos = dayTodos.filter(todo => Boolean(todo.isRoutine));
+  } else if (filterCat !== 'all') {
     const filterCatObj = state.categories[filterCat];
     const filterCatLabel = filterCatObj ? filterCatObj.label.toLowerCase() : '';
     filteredTodos = dayTodos.filter(todo => {
@@ -6818,6 +6854,49 @@ function renderTodos() {
   }
 
   if (filteredTodos.length === 0) {
+    if (filterCat === 'routine') {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'todo-filter-empty-state';
+      emptyDiv.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.1rem;">🔄</span>
+          <span>선택한 날짜에 등록된 <strong>루틴</strong> 할 일이 없습니다.</span>
+        </div>
+        <div class="empty-actions">
+          <button type="button" class="empty-btn primary" id="btn-quick-add-routine">
+            ➕ 새 루틴 할 일 추가하기
+          </button>
+          <button type="button" class="empty-btn" id="btn-show-all-todos-filter">
+            📋 전체 할 일 보기
+          </button>
+        </div>
+      `;
+      todoItemsList.appendChild(emptyDiv);
+
+      const btnQuickAdd = emptyDiv.querySelector('#btn-quick-add-routine');
+      if (btnQuickAdd) {
+        btnQuickAdd.addEventListener('click', () => {
+          const routineCheckbox = document.getElementById('routine-checkbox');
+          if (routineCheckbox) {
+            routineCheckbox.checked = true;
+          }
+          if (todoInputField) {
+            todoInputField.focus();
+            const todoInputContainer = document.querySelector('.todo-input-container');
+            if (todoInputContainer) todoInputContainer.classList.add('expanded');
+          }
+        });
+      }
+      const btnShowAll = emptyDiv.querySelector('#btn-show-all-todos-filter');
+      if (btnShowAll) {
+        btnShowAll.addEventListener('click', () => {
+          state.todoFilterCategory = 'all';
+          updateUI();
+        });
+      }
+      return;
+    }
+
     const activeCatObj = state.categories[filterCat];
     const activeCatLabel = activeCatObj ? activeCatObj.label : '선택한 카테고리';
     const emptyDiv = document.createElement('div');
@@ -6994,6 +7073,12 @@ function renderTodos() {
       const routineBadge = document.createElement('span');
       routineBadge.classList.add('routine-badge');
       routineBadge.textContent = '루틴';
+      routineBadge.style.cursor = 'pointer';
+      routineBadge.title = '클릭 시 루틴 목록만 보기';
+      routineBadge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleSelectTodoFilterCategory('routine');
+      });
       metaDiv.appendChild(routineBadge);
     }
 
@@ -7009,6 +7094,13 @@ function renderTodos() {
       badge.style.border = `1px solid ${hexToRgba(cat.color, 0.25)}`;
     }
     badge.textContent = cat.label;
+    badge.style.cursor = 'pointer';
+    badge.title = `클릭 시 '${cat.label}' 카테고리만 보기`;
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const catKey = Object.keys(state.categories).find(k => k === todo.category || state.categories[k].label === todo.category) || todo.category;
+      handleSelectTodoFilterCategory(catKey);
+    });
     metaDiv.appendChild(badge);
 
     // Time Badge

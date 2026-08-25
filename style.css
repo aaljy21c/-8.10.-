@@ -2281,22 +2281,34 @@ body.light-theme .header-toggle-btn:hover {
 .phone-mode .header-controls {
   width: 100%;
   display: none; /* Hidden by default in phone mode */
-  grid-template-columns: repeat(auto-fit, minmax(32px, 1fr));
-  justify-items: center;
+  flex-direction: row !important;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 4px;
   margin-top: 8px;
   order: 3;
   animation: slideDown 0.3s ease;
   box-sizing: border-box;
 }
 
+.phone-mode .header-controls::-webkit-scrollbar {
+  display: none;
+}
+
 .phone-mode .header-controls.show {
-  display: grid !important;
+  display: flex !important;
 }
 
 .phone-mode .header-gdrive-group {
-  display: contents;
+  display: flex !important;
+  flex-wrap: nowrap !important;
 }
 
 @keyframes slideDown {

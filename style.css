@@ -2281,10 +2281,10 @@ body.light-theme .header-toggle-btn:hover {
 .phone-mode .header-controls {
   width: 100%;
   display: none; /* Hidden by default in phone mode */
-  justify-content: center;
+  grid-template-columns: repeat(auto-fit, minmax(32px, 1fr));
+  justify-items: center;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap !important;
+  gap: 8px;
   margin-top: 8px;
   order: 3;
   animation: slideDown 0.3s ease;
@@ -2292,12 +2292,11 @@ body.light-theme .header-toggle-btn:hover {
 }
 
 .phone-mode .header-controls.show {
-  display: flex !important;
-  flex-wrap: wrap !important;
+  display: grid !important;
 }
 
 .phone-mode .header-gdrive-group {
-  flex-wrap: wrap !important;
+  display: contents;
 }
 
 @keyframes slideDown {

@@ -821,6 +821,7 @@ h1, h2, h3 {
   --cat-color: var(--accent-color);
   --cat-rgb: 99, 102, 241;
 }
+.todo-cat-filter-tab[data-category="routine"] { --cat-color: #a855f7; --cat-rgb: 168, 85, 247; }
 .todo-cat-filter-tab[data-category="health"] { --cat-color: var(--cat-health); --cat-rgb: 16, 185, 129; }
 .todo-cat-filter-tab[data-category="family"] { --cat-color: var(--cat-family); --cat-rgb: 244, 63, 94; }
 .todo-cat-filter-tab[data-category="school"] { --cat-color: var(--cat-school); --cat-rgb: 14, 165, 233; }

@@ -30,6 +30,8 @@ let state = {
   showPendingDrilldown: false, // Pending tasks drilldown toggle
   diaries: {}, // Diary entries indexed by dateKey (now storing array of record objects)
   diaryDraftImages: [], // Draft array of image base64 strings for the record being created/edited
+  diaryDraftDrawing: [], // Draft array of strokes for the drawing board
+  diaryDraftAudio: [], // Draft array of audio objects {src, transcription}
   editingRecordId: null, // ID of the record being edited ('new' for adding new, numeric ID for edit, null for none)
   editingTimelineRecordId: null, // ID of the record being inline edited in the timeline
   renderedDiaryDate: null, // Track which date is currently rendered in diary view to auto-collapse creator on date shift
@@ -78,7 +80,10 @@ let lightboxIsDraft = false;
 // Todo Editing Modal State
 let editingTodoId = null;
 let modalSelectedCategory = 'none';
+let editModalSelectedAmpm = 'AM';
 let todoEditDraftImages = [];
+let todoEditDraftDrawing = [];
+let todoEditDraftAudio = [];
 
 // Search Navigation state tracker
 let searchAutoOpenedSections = [];
@@ -3206,6 +3211,8 @@ function setupEventListeners() {
     btnAddRecordTrigger.addEventListener('click', () => {
       state.editingRecordId = 'new';
       state.diaryDraftImages = [];
+      state.diaryDraftDrawing = [];
+      state.diaryDraftAudio = [];
       renderDiary();
       
       // Auto focus textarea
@@ -3219,6 +3226,8 @@ function setupEventListeners() {
     btnCancelNewRecord.addEventListener('click', () => {
       state.editingRecordId = null;
       state.diaryDraftImages = [];
+      state.diaryDraftDrawing = [];
+      state.diaryDraftAudio = [];
       renderDiary();
     });
   }
@@ -3228,9 +3237,11 @@ function setupEventListeners() {
       const dateKey = state.selectedDate;
       const textVal = newRecordText.value.trim();
       const imagesVal = [...state.diaryDraftImages];
+      const drawingVal = [...(state.diaryDraftDrawing || [])];
+      const audioVal = [...(state.diaryDraftAudio || [])];
 
-      if (!textVal && imagesVal.length === 0) {
-        alert('내용이나 사진을 입력해 주세요.');
+      if (!textVal && imagesVal.length === 0 && drawingVal.length === 0 && audioVal.length === 0) {
+        alert('내용이나 사진, 그림, 음성 중 하나를 입력해 주세요.');
         return;
       }
 
@@ -3241,12 +3252,16 @@ function setupEventListeners() {
       state.diaries[dateKey].push({
         id: Date.now(),
         text: textVal,
-        images: imagesVal
+        images: imagesVal,
+        drawing: drawingVal,
+        audio: audioVal
       });
 
       saveDiaries();
       state.editingRecordId = null;
       state.diaryDraftImages = [];
+      state.diaryDraftDrawing = [];
+      state.diaryDraftAudio = [];
       updateUI();
     });
   }
@@ -3452,17 +3467,21 @@ function setupEventListeners() {
       const importantInput = document.getElementById('todo-edit-modal-important');
       const isImportantVal = importantInput ? importantInput.checked : Boolean(todo.isImportant);
       const newImages = [...todoEditDraftImages];
+      const newDrawing = [...todoEditDraftDrawing];
+      const newAudio = [...todoEditDraftAudio];
 
       const todo = state.todos[dateKey].find(t => t.id === editingTodoId);
       if (todo) {
-        // Save if anything changed (text, category, time, date, memo, importance, or memo images)
-        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey || (todo.memo || '') !== memoValue || Boolean(todo.isImportant) !== isImportantVal || JSON.stringify(todo.memoImages || []) !== JSON.stringify(newImages)) {
+        // Save if anything changed (text, category, time, date, memo, importance, memo images, memo drawing, or memo audio)
+        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey || (todo.memo || '') !== memoValue || Boolean(todo.isImportant) !== isImportantVal || JSON.stringify(todo.memoImages || []) !== JSON.stringify(newImages) || JSON.stringify(todo.memoDrawing || []) !== JSON.stringify(newDrawing) || JSON.stringify(todo.memoAudio || []) !== JSON.stringify(newAudio)) {
           pushToHistory();
           todo.text = text;
           todo.category = modalSelectedCategory;
           todo.time = timeValue;
           todo.memo = memoValue;
           todo.memoImages = newImages;
+          todo.memoDrawing = newDrawing;
+          todo.memoAudio = newAudio;
           todo.isImportant = isImportantVal;
 
           // If date has changed, move the todo item
@@ -4211,6 +4230,8 @@ function openTodoEditModal(todoId) {
   editingTodoId = todoId;
   modalSelectedCategory = todo.category || 'none';
   todoEditDraftImages = todo.memoImages ? JSON.parse(JSON.stringify(todo.memoImages)) : [];
+  todoEditDraftDrawing = todo.memoDrawing ? JSON.parse(JSON.stringify(todo.memoDrawing)) : [];
+  todoEditDraftAudio = todo.memoAudio ? JSON.parse(JSON.stringify(todo.memoAudio)) : [];
 
   // Fill text input
   const textInput = document.getElementById('todo-edit-modal-text');
@@ -4302,6 +4323,33 @@ function openTodoEditModal(todoId) {
   }
   
   renderTodoEditPreviews();
+
+  // Initialize drawing board
+  const drawingContainer = document.getElementById('todo-edit-modal-drawing-container');
+  if (drawingContainer) {
+    drawingContainer.innerHTML = '';
+    new NeonDrawingBoard(drawingContainer, {
+      initialData: todoEditDraftDrawing,
+      onChange: (data) => {
+        todoEditDraftDrawing = data;
+      }
+    });
+  }
+
+  // Setup Todo audio dictate button
+  const todoDictateBtn = document.getElementById('btn-dictate-todo-modal');
+  if (todoDictateBtn) {
+    // Remove existing event listeners by replacing the node (to prevent duplicates)
+    const newBtn = todoDictateBtn.cloneNode(true);
+    todoDictateBtn.parentNode.replaceChild(newBtn, todoDictateBtn);
+    handleAudioDictateClick(
+      'btn-dictate-todo-modal', 
+      'todo-edit-modal-memo', 
+      todoEditDraftAudio, 
+      'todo-edit-modal-audio-previews',
+      () => renderTodoEditPreviews()
+    );
+  }
 }
 
 function renderTodoEditPreviews() {
@@ -4338,6 +4386,9 @@ function renderTodoEditPreviews() {
     thumb.appendChild(imgWrapper);
     previewsContainer.appendChild(thumb);
   });
+  
+  // Render Audio Previews
+  renderAudioPreviews('todo-edit-modal-audio-previews', todoEditDraftAudio, () => renderTodoEditPreviews());
 }
 
 // Close Todo Edit Modal
@@ -4354,6 +4405,9 @@ function closeTodoEditModal() {
   if (selectModalMin) selectModalMin.value = '';
   editModalSelectedAmpm = 'AM';
   editingTodoId = null;
+  todoEditDraftImages = [];
+  todoEditDraftDrawing = [];
+  todoEditDraftAudio = [];
 }
 
 // Delete Todo Item
@@ -5043,11 +5097,47 @@ function renderDiary() {
 
       if (state.editingRecordId === record.id) {
         // --- EDIT MODE FOR THIS RECORD ---
+        const textContainer = document.createElement('div');
+        textContainer.style.position = 'relative';
+
         const textarea = document.createElement('textarea');
         textarea.className = 'diary-textarea';
+        textarea.id = `edit-record-text-${record.id}`;
         textarea.value = record.text;
         textarea.placeholder = '기록 내용을 수정해 보세요...';
-        card.appendChild(textarea);
+        textarea.style.paddingRight = '36px';
+        textContainer.appendChild(textarea);
+
+        const dictateBtn = document.createElement('button');
+        dictateBtn.type = 'button';
+        dictateBtn.className = 'dictation-btn';
+        dictateBtn.id = `btn-dictate-edit-${record.id}`;
+        dictateBtn.title = '음성 녹음 및 텍스트 변환(STT)';
+        dictateBtn.style.top = '8px';
+        dictateBtn.innerHTML = '🎙️';
+        textContainer.appendChild(dictateBtn);
+        card.appendChild(textContainer);
+
+        // Previews row (Audio)
+        const audioPreviewsContainer = document.createElement('div');
+        audioPreviewsContainer.className = 'audio-previews-container';
+        audioPreviewsContainer.id = `edit-record-audio-previews-${record.id}`;
+        audioPreviewsContainer.style.display = 'flex';
+        audioPreviewsContainer.style.flexDirection = 'column';
+        audioPreviewsContainer.style.gap = '8px';
+        audioPreviewsContainer.style.marginTop = '8px';
+        card.appendChild(audioPreviewsContainer);
+
+        setTimeout(() => {
+          handleAudioDictateClick(
+            `btn-dictate-edit-${record.id}`, 
+            `edit-record-text-${record.id}`, 
+            state.diaryDraftAudio, 
+            `edit-record-audio-previews-${record.id}`, 
+            () => renderAudioPreviews(`edit-record-audio-previews-${record.id}`, state.diaryDraftAudio, () => renderAudioPreviews(`edit-record-audio-previews-${record.id}`, state.diaryDraftAudio, null))
+          );
+          renderAudioPreviews(`edit-record-audio-previews-${record.id}`, state.diaryDraftAudio, () => renderAudioPreviews(`edit-record-audio-previews-${record.id}`, state.diaryDraftAudio, null));
+        }, 0);
 
         // Options row: uploader & status
         const mediaRow = document.createElement('div');
@@ -5133,6 +5223,24 @@ function renderDiary() {
         });
         card.appendChild(previewsContainer);
 
+        // Drawing Board for Edit Mode
+        const drawingLabel = document.createElement('label');
+        drawingLabel.className = 'diary-photo-upload-label';
+        drawingLabel.style.marginTop = '10px';
+        drawingLabel.innerHTML = '<span class="upload-icon">🎨</span> 손그림 그리기';
+        card.appendChild(drawingLabel);
+
+        const drawingContainer = document.createElement('div');
+        drawingContainer.className = 'diary-drawing-container';
+        card.appendChild(drawingContainer);
+
+        new NeonDrawingBoard(drawingContainer, {
+          initialData: state.diaryDraftDrawing || [],
+          onChange: (data) => {
+            state.diaryDraftDrawing = data;
+          }
+        });
+
         // Actions row
         const actionsRow = document.createElement('div');
         actionsRow.className = 'record-actions';
@@ -5144,9 +5252,13 @@ function renderDiary() {
         saveBtn.addEventListener('click', () => {
           record.text = textarea.value;
           record.images = [...state.diaryDraftImages];
+          record.drawing = [...(state.diaryDraftDrawing || [])];
+          record.audio = [...(state.diaryDraftAudio || [])];
           saveDiaries();
           state.editingRecordId = null;
           state.diaryDraftImages = [];
+          state.diaryDraftDrawing = [];
+          state.diaryDraftAudio = [];
           updateUI();
         });
         actionsRow.appendChild(saveBtn);
@@ -5158,6 +5270,8 @@ function renderDiary() {
         cancelBtn.addEventListener('click', () => {
           state.editingRecordId = null;
           state.diaryDraftImages = [];
+          state.diaryDraftDrawing = [];
+          state.diaryDraftAudio = [];
           renderDiary();
         });
         actionsRow.appendChild(cancelBtn);
@@ -5189,6 +5303,27 @@ function renderDiary() {
           card.appendChild(grid);
         }
 
+        if (record.drawing && record.drawing.length > 0) {
+          const viewDrawingContainer = document.createElement('div');
+          viewDrawingContainer.className = 'diary-drawing-container view-mode';
+          card.appendChild(viewDrawingContainer);
+
+          new NeonDrawingBoard(viewDrawingContainer, {
+            initialData: record.drawing,
+            readOnly: true
+          });
+        }
+
+        if (record.audio && record.audio.length > 0) {
+          const audioViewContainer = document.createElement('div');
+          audioViewContainer.className = 'audio-previews-container';
+          audioViewContainer.style.marginTop = '8px';
+          card.appendChild(audioViewContainer);
+          setTimeout(() => {
+            renderAudioPreviews(audioViewContainer.id || (audioViewContainer.id = `view-audio-${record.id}`), record.audio, null);
+          }, 0);
+        }
+
         const actionsRow = document.createElement('div');
         actionsRow.className = 'record-actions';
 
@@ -5199,6 +5334,8 @@ function renderDiary() {
         editBtn.addEventListener('click', () => {
           state.editingRecordId = record.id;
           state.diaryDraftImages = [...(record.images || [])];
+          state.diaryDraftDrawing = record.drawing ? JSON.parse(JSON.stringify(record.drawing)) : [];
+          state.diaryDraftAudio = record.audio ? JSON.parse(JSON.stringify(record.audio)) : [];
           renderDiary();
         });
         actionsRow.appendChild(editBtn);
@@ -5268,6 +5405,17 @@ function renderDiary() {
         thumb.appendChild(imgWrapper);
 
         creatorPreviews.appendChild(thumb);
+      });
+    }
+
+    const drawingContainer = document.getElementById('new-record-drawing-container');
+    if (drawingContainer) {
+      drawingContainer.innerHTML = ''; // Reset container
+      new NeonDrawingBoard(drawingContainer, {
+        initialData: state.diaryDraftDrawing || [],
+        onChange: (data) => {
+          state.diaryDraftDrawing = data;
+        }
       });
     }
   } else {
@@ -7307,6 +7455,37 @@ function renderTodos() {
       itemLeft.appendChild(memoPhotosDiv);
     }
 
+    // Memo Drawing rendering
+    if (todo.memoDrawing && todo.memoDrawing.length > 0) {
+      const viewDrawingContainer = document.createElement('div');
+      viewDrawingContainer.className = 'diary-drawing-container view-mode';
+      viewDrawingContainer.style.marginTop = '6px';
+      viewDrawingContainer.style.width = '100%';
+      viewDrawingContainer.style.maxWidth = '400px'; // Limit width slightly for todo list
+
+      itemLeft.appendChild(viewDrawingContainer);
+
+      new NeonDrawingBoard(viewDrawingContainer, {
+        initialData: todo.memoDrawing,
+        readOnly: true
+      });
+    }
+
+    // Memo Audio rendering
+    if (todo.memoAudio && todo.memoAudio.length > 0) {
+      const audioViewContainer = document.createElement('div');
+      audioViewContainer.className = 'audio-previews-container';
+      audioViewContainer.style.marginTop = '6px';
+      audioViewContainer.style.width = '100%';
+      audioViewContainer.style.maxWidth = '400px';
+      
+      itemLeft.appendChild(audioViewContainer);
+      
+      setTimeout(() => {
+        renderAudioPreviews(audioViewContainer.id || (audioViewContainer.id = `view-audio-todo-${todo.id}`), todo.memoAudio, null);
+      }, 0);
+    }
+
     // Action buttons container
     const actionBtns = document.createElement('div');
     actionBtns.classList.add('todo-action-btns');
@@ -7692,19 +7871,7 @@ function initVoiceAssistant() {
     });
   }
   
-  if (dictTodo) {
-    dictTodo.addEventListener('click', () => {
-      const inputField = document.getElementById('todo-input-field');
-      startListening(inputField);
-    });
-  }
-  
-  if (dictRecord) {
-    dictRecord.addEventListener('click', () => {
-      const inputField = document.getElementById('new-record-text');
-      startListening(inputField);
-    });
-  }
+  // Note: dictTodo and dictRecord handlers have been replaced by handleAudioDictateClick
 }
 
 function handleVoiceCommand(transcript, recognition, stopListeningUI) {
@@ -7843,3 +8010,183 @@ function handleVoiceCommand(transcript, recognition, stopListeningUI) {
 }
 
 document.addEventListener('DOMContentLoaded', initVoiceAssistant);
+
+// ====== AUDIO RECORDING & STT ======
+const AudioRecorder = {
+  mediaRecorder: null,
+  audioChunks: [],
+  speechRecognition: null,
+  isRecording: false,
+  finalTranscript: '',
+  onStop: null,
+  onProgress: null,
+  
+  init() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      this.speechRecognition = new SpeechRecognition();
+      this.speechRecognition.lang = 'ko-KR';
+      this.speechRecognition.continuous = true;
+      this.speechRecognition.interimResults = true;
+      
+      this.speechRecognition.onresult = (event) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            this.finalTranscript += event.results[i][0].transcript + ' ';
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        if (this.onProgress) {
+          this.onProgress(this.finalTranscript + interim);
+        }
+      };
+      
+      this.speechRecognition.onerror = (e) => console.error("AudioRecorder STT error:", e.error);
+    }
+  },
+
+  async start(onStopCallback, onProgressCallback) {
+    if (this.isRecording) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(stream);
+      this.audioChunks = [];
+      this.finalTranscript = '';
+      this.onStop = onStopCallback;
+      this.onProgress = onProgressCallback;
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
+      };
+
+      this.mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64Audio = reader.result;
+          if (this.onStop) {
+            this.onStop(base64Audio, this.finalTranscript.trim());
+          }
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      this.mediaRecorder.start();
+      this.isRecording = true;
+      
+      if (this.speechRecognition) {
+        try { this.speechRecognition.start(); } catch(e) {}
+      }
+    } catch (err) {
+      console.error("Microphone access denied or error:", err);
+      alert("마이크 접근 권한이 필요합니다.");
+    }
+  },
+
+  stop() {
+    if (!this.isRecording) return;
+    this.isRecording = false;
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.stop();
+    }
+    if (this.speechRecognition) {
+      try { this.speechRecognition.stop(); } catch(e) {}
+    }
+  }
+};
+AudioRecorder.init();
+
+function renderAudioPreviews(containerId, draftArray, onChangeCallback) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  draftArray.forEach((audioData, idx) => {
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.gap = '8px';
+    wrapper.style.background = 'rgba(255,255,255,0.05)';
+    wrapper.style.padding = '8px';
+    wrapper.style.borderRadius = '6px';
+
+    const audioEl = document.createElement('audio');
+    audioEl.controls = true;
+    audioEl.src = audioData.src || audioData;
+    audioEl.style.height = '36px';
+    audioEl.style.flex = '1';
+    
+    wrapper.appendChild(audioEl);
+
+    if (onChangeCallback) {
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.innerHTML = '❌';
+      delBtn.style.background = 'none';
+      delBtn.style.border = 'none';
+      delBtn.style.cursor = 'pointer';
+      delBtn.style.fontSize = '1.2rem';
+      delBtn.addEventListener('click', () => {
+        draftArray.splice(idx, 1);
+        onChangeCallback();
+      });
+      wrapper.appendChild(delBtn);
+    }
+    container.appendChild(wrapper);
+  });
+}
+
+function handleAudioDictateClick(btnId, inputId, draftsArray, containerId, onChange) {
+  const btn = document.getElementById(btnId);
+  const textField = document.getElementById(inputId);
+  if (!btn) return;
+  
+  btn.addEventListener('click', () => {
+    if (AudioRecorder.isRecording) {
+      AudioRecorder.stop();
+      btn.classList.remove('listening');
+      btn.style.animation = 'none';
+      btn.innerHTML = '🎙️';
+    } else {
+      btn.classList.add('listening');
+      btn.style.animation = 'pulse 1.5s infinite';
+      btn.innerHTML = '⏹️';
+      AudioRecorder.start(
+        (base64Audio, transcript) => {
+          if (base64Audio) {
+            draftsArray.push({ src: base64Audio, transcription: transcript });
+            if (onChange) onChange();
+          }
+        },
+        (interimTranscript) => {
+          if (textField) {
+            if (AudioRecorder.initialText === undefined) {
+               AudioRecorder.initialText = textField.value;
+            }
+            const space = AudioRecorder.initialText.length > 0 && !AudioRecorder.initialText.endsWith(' ') ? ' ' : '';
+            textField.value = AudioRecorder.initialText + space + interimTranscript;
+          }
+        }
+      );
+      if (textField) AudioRecorder.initialText = textField.value;
+    }
+  });
+}
+
+// Setup dictate buttons for New Record and Todo Modal after DOM loads
+document.addEventListener('DOMContentLoaded', () => {
+  handleAudioDictateClick(
+    'btn-dictate-record', 
+    'new-record-text', 
+    state.diaryDraftAudio, 
+    'new-record-audio-previews', 
+    () => renderAudioPreviews('new-record-audio-previews', state.diaryDraftAudio, () => renderAudioPreviews('new-record-audio-previews', state.diaryDraftAudio, null)) // Will hook to renderDiary later
+  );
+  
+  // Note: todo modal is dynamic, but we can attach a global listener or attach every time.
+  // We'll attach it dynamically inside openTodoEditModal.
+});

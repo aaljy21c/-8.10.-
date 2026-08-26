@@ -1,0 +1,534 @@
+class NeonDrawingBoard {
+  constructor(container, options = {}) {
+    this.container = container;
+    this.onChange = options.onChange || null;
+    this.readOnly = options.readOnly || false;
+
+    // Load initial data
+    this.strokes = options.initialData ? JSON.parse(JSON.stringify(options.initialData)) : [];
+    this.undoStack = [];
+    this.redoStack = [];
+
+    // Settings
+    this.currentTool = 'pen'; // pen, highlighter, eraser, lasso
+    this.penColor = '#ffffff';
+    this.penSize = 2;
+    this.highlighterColor = '#facc15';
+    this.highlighterSize = 15;
+    this.highlighterOpacity = 0.4;
+
+    // Interaction state
+    this.isDrawing = false;
+    this.currentStroke = null;
+    this.points = [];
+    this.holdTimer = null;
+    this.isSnapped = false;
+
+    // Lasso state
+    this.lassoPoints = [];
+    this.selectedStrokes = [];
+    this.isDraggingSelection = false;
+    this.dragStartPoint = null;
+    this.dragOffset = { x: 0, y: 0 };
+
+    this.initDOM();
+    if (!this.readOnly) {
+      this.bindEvents();
+    }
+    
+    // Resize handling
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(this.wrapper);
+    
+    // Initial render
+    setTimeout(() => this.resize(), 0);
+  }
+
+  initDOM() {
+    this.container.innerHTML = '';
+    
+    // Main wrapper
+    this.wrapper = document.createElement('div');
+    this.wrapper.className = 'neon-drawing-wrapper';
+    
+    // Toolbar
+    if (!this.readOnly) {
+      this.toolbar = document.createElement('div');
+      this.toolbar.className = 'neon-drawing-toolbar';
+      this.buildToolbar();
+      this.wrapper.appendChild(this.toolbar);
+    }
+
+    // Canvas Container
+    this.canvasContainer = document.createElement('div');
+    this.canvasContainer.className = 'neon-drawing-canvas-container';
+    
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    // Prevent touch gestures like scrolling
+    this.canvas.style.touchAction = 'none';
+
+    this.canvasContainer.appendChild(this.canvas);
+    this.wrapper.appendChild(this.canvasContainer);
+    this.container.appendChild(this.wrapper);
+
+    // Auto-expand if initial strokes go beyond default height
+    let maxY = 0;
+    this.strokes.forEach(stroke => {
+      stroke.points.forEach(p => {
+        if (p.y > maxY) maxY = p.y;
+      });
+    });
+    if (maxY > 350) { // Default is 400, add padding
+      this.canvasContainer.style.minHeight = `${maxY + 50}px`;
+    }
+  }
+
+  buildToolbar() {
+    this.toolbar.innerHTML = `
+      <div class="drawing-tools">
+        <button class="tool-btn active" data-tool="pen" title="펜">🖊️</button>
+        <button class="tool-btn" data-tool="highlighter" title="형광펜">🖍️</button>
+        <button class="tool-btn" data-tool="eraser" title="지우개">🧹</button>
+        <button class="tool-btn" data-tool="lasso" title="올가미(이동)">✂️</button>
+      </div>
+      <div class="drawing-settings">
+        <!-- Dynamic settings based on tool -->
+      </div>
+      <div class="drawing-actions">
+        <button class="action-btn" data-action="undo" title="실행 취소">↩️</button>
+        <button class="action-btn" data-action="redo" title="다시 실행">↪️</button>
+        <button class="action-btn" data-action="clear" title="모두 지우기">🗑️</button>
+      </div>
+    `;
+
+    // Tool switching
+    const toolBtns = this.toolbar.querySelectorAll('.tool-btn');
+    toolBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        toolBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentTool = btn.dataset.tool;
+        this.clearSelection();
+        this.updateSettingsUI();
+      });
+    });
+
+    // Action buttons
+    this.toolbar.querySelector('[data-action="undo"]').addEventListener('click', (e) => { e.preventDefault(); this.undo(); });
+    this.toolbar.querySelector('[data-action="redo"]').addEventListener('click', (e) => { e.preventDefault(); this.redo(); });
+    this.toolbar.querySelector('[data-action="clear"]').addEventListener('click', (e) => { e.preventDefault(); this.clearAll(); });
+
+    this.settingsContainer = this.toolbar.querySelector('.drawing-settings');
+    this.updateSettingsUI();
+  }
+
+  updateSettingsUI() {
+    this.settingsContainer.innerHTML = '';
+    if (this.currentTool === 'pen') {
+      this.settingsContainer.innerHTML = `
+        <div class="setting-group">
+          <input type="color" class="color-picker" value="${this.penColor}" id="pen-color">
+          <input type="range" class="size-slider" min="1" max="20" value="${this.penSize}" id="pen-size">
+        </div>
+      `;
+      this.settingsContainer.querySelector('#pen-color').addEventListener('input', e => this.penColor = e.target.value);
+      this.settingsContainer.querySelector('#pen-size').addEventListener('input', e => this.penSize = parseInt(e.target.value));
+    } else if (this.currentTool === 'highlighter') {
+      this.settingsContainer.innerHTML = `
+        <div class="setting-group">
+          <input type="color" class="color-picker" value="${this.highlighterColor}" id="hl-color">
+          <input type="range" class="size-slider" min="5" max="50" value="${this.highlighterSize}" id="hl-size" title="굵기">
+          <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.highlighterOpacity}" id="hl-opacity" title="농도">
+        </div>
+      `;
+      this.settingsContainer.querySelector('#hl-color').addEventListener('input', e => this.highlighterColor = e.target.value);
+      this.settingsContainer.querySelector('#hl-size').addEventListener('input', e => this.highlighterSize = parseInt(e.target.value));
+      this.settingsContainer.querySelector('#hl-opacity').addEventListener('input', e => this.highlighterOpacity = parseFloat(e.target.value));
+    }
+  }
+
+  bindEvents() {
+    this.canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
+    this.canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
+    this.canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
+    this.canvas.addEventListener('pointerout', this.onPointerUp.bind(this));
+  }
+
+  getPointerPos(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }
+
+  onPointerDown(e) {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    this.canvas.setPointerCapture(e.pointerId);
+    
+    const pos = this.getPointerPos(e);
+    
+    if (this.currentTool === 'lasso' && this.selectedStrokes.length > 0) {
+      if (this.isPointInSelectionBounds(pos)) {
+        this.isDraggingSelection = true;
+        this.dragStartPoint = pos;
+        this.originalSelectionStrokes = JSON.parse(JSON.stringify(this.selectedStrokes));
+        return;
+      } else {
+        this.clearSelection();
+      }
+    }
+
+    this.isDrawing = true;
+    this.isSnapped = false;
+    this.points = [pos];
+
+    if (this.currentTool === 'pen' || this.currentTool === 'highlighter') {
+      this.currentStroke = {
+        tool: this.currentTool,
+        color: this.currentTool === 'pen' ? this.penColor : this.highlighterColor,
+        size: this.currentTool === 'pen' ? this.penSize : this.highlighterSize,
+        opacity: this.currentTool === 'pen' ? 1 : this.highlighterOpacity,
+        points: [...this.points],
+        isShape: false
+      };
+      this.startHoldTimer();
+    } else if (this.currentTool === 'lasso') {
+      this.lassoPoints = [pos];
+    } else if (this.currentTool === 'eraser') {
+      this.eraseAt(pos);
+    }
+    
+    this.render();
+  }
+
+  onPointerMove(e) {
+    const pos = this.getPointerPos(e);
+
+    if (this.isDraggingSelection) {
+      const dx = pos.x - this.dragStartPoint.x;
+      const dy = pos.y - this.dragStartPoint.y;
+      
+      this.selectedStrokes.forEach((s, idx) => {
+        const orig = this.originalSelectionStrokes[idx];
+        s.points = orig.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+      });
+      this.render();
+      return;
+    }
+
+    if (!this.isDrawing) return;
+
+    // Auto-expand canvas height if drawing near the bottom
+    const containerHeight = this.canvasContainer.clientHeight;
+    if (pos.y > containerHeight - 50) {
+      this.canvasContainer.style.minHeight = `${containerHeight + 300}px`;
+      // ResizeObserver will handle the canvas resize automatically
+    }
+
+    if (this.currentTool === 'pen' || this.currentTool === 'highlighter') {
+      if (this.isSnapped && this.currentStroke) {
+         this.currentStroke.points[this.currentStroke.points.length - 1] = pos;
+      } else {
+         // Reset hold timer if moved more than a few pixels
+         const lastPt = this.points[this.points.length - 1];
+         if (Math.hypot(pos.x - lastPt.x, pos.y - lastPt.y) > 3) {
+            this.resetHoldTimer();
+         }
+         this.points.push(pos);
+         this.currentStroke.points.push(pos);
+      }
+    } else if (this.currentTool === 'lasso') {
+      this.lassoPoints.push(pos);
+    } else if (this.currentTool === 'eraser') {
+      this.eraseAt(pos);
+    }
+    
+    this.render();
+  }
+
+  onPointerUp(e) {
+    this.clearHoldTimer();
+    
+    if (this.isDraggingSelection) {
+      this.isDraggingSelection = false;
+      this.saveState();
+      return;
+    }
+
+    if (!this.isDrawing) return;
+    this.isDrawing = false;
+
+    if (this.currentTool === 'pen' || this.currentTool === 'highlighter') {
+      if (this.currentStroke && this.currentStroke.points.length > 1) {
+        this.strokes.push(this.currentStroke);
+        this.saveState();
+      }
+      this.currentStroke = null;
+    } else if (this.currentTool === 'lasso') {
+      this.applyLassoSelection();
+      this.lassoPoints = [];
+    }
+
+    this.points = [];
+    this.render();
+  }
+
+  startHoldTimer() {
+    this.clearHoldTimer();
+    this.holdTimer = setTimeout(() => {
+      if (this.isDrawing && this.points.length > 5) {
+        // Snap to line
+        this.isSnapped = true;
+        const start = this.points[0];
+        const end = this.points[this.points.length - 1];
+        this.currentStroke.points = [start, end];
+        this.currentStroke.isShape = true;
+        this.currentStroke.shapeType = 'line';
+        this.render();
+      }
+    }, 600);
+  }
+
+  resetHoldTimer() {
+    this.startHoldTimer();
+  }
+
+  clearHoldTimer() {
+    if (this.holdTimer) {
+      clearTimeout(this.holdTimer);
+      this.holdTimer = null;
+    }
+  }
+
+  eraseAt(pos) {
+    const eraseRadius = 15;
+    let erased = false;
+    for (let i = this.strokes.length - 1; i >= 0; i--) {
+      const stroke = this.strokes[i];
+      if (this.isPointNearStroke(pos, stroke, eraseRadius)) {
+        this.strokes.splice(i, 1);
+        erased = true;
+        break; // Erase one at a time
+      }
+    }
+    if (erased) {
+      this.saveState();
+      this.render();
+    }
+  }
+
+  isPointNearStroke(pt, stroke, radius) {
+    for (let i = 0; i < stroke.points.length - 1; i++) {
+      const p1 = stroke.points[i];
+      const p2 = stroke.points[i + 1];
+      if (this.distToSegmentSquared(pt, p1, p2) < radius * radius) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  distToSegmentSquared(p, v, w) {
+    const l2 = (v.x - w.x) ** 2 + (v.y - w.y) ** 2;
+    if (l2 === 0) return (p.x - v.x) ** 2 + (p.y - v.y) ** 2;
+    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return (p.x - (v.x + t * (w.x - v.x))) ** 2 + (p.y - (v.y + t * (w.y - v.y))) ** 2;
+  }
+
+  applyLassoSelection() {
+    this.selectedStrokes = [];
+    if (this.lassoPoints.length < 3) return;
+
+    this.strokes.forEach(stroke => {
+      let insideCount = 0;
+      stroke.points.forEach(p => {
+        if (this.isPointInPolygon(p, this.lassoPoints)) insideCount++;
+      });
+      if (insideCount > stroke.points.length / 3 || insideCount > 5) {
+        this.selectedStrokes.push(stroke);
+      }
+    });
+  }
+
+  clearSelection() {
+    this.selectedStrokes = [];
+    this.render();
+  }
+
+  isPointInPolygon(point, vs) {
+    let x = point.x, y = point.y;
+    let inside = false;
+    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+      let xi = vs[i].x, yi = vs[i].y;
+      let xj = vs[j].x, yj = vs[j].y;
+      let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  isPointInSelectionBounds(pt) {
+    if (this.selectedStrokes.length === 0) return false;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    this.selectedStrokes.forEach(s => {
+      s.points.forEach(p => {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      });
+    });
+    const pad = 10;
+    return pt.x >= minX - pad && pt.x <= maxX + pad && pt.y >= minY - pad && pt.y <= maxY + pad;
+  }
+
+  saveState() {
+    this.undoStack.push(JSON.parse(JSON.stringify(this.strokes)));
+    if (this.undoStack.length > 50) this.undoStack.shift();
+    this.redoStack = [];
+    if (this.onChange) this.onChange(this.getData());
+  }
+
+  undo() {
+    if (this.undoStack.length > 0) {
+      this.redoStack.push(JSON.parse(JSON.stringify(this.strokes)));
+      this.strokes = this.undoStack.pop();
+      this.clearSelection();
+      this.render();
+      if (this.onChange) this.onChange(this.getData());
+    }
+  }
+
+  redo() {
+    if (this.redoStack.length > 0) {
+      this.undoStack.push(JSON.parse(JSON.stringify(this.strokes)));
+      this.strokes = this.redoStack.pop();
+      this.clearSelection();
+      this.render();
+      if (this.onChange) this.onChange(this.getData());
+    }
+  }
+
+  clearAll() {
+    if (this.strokes.length > 0) {
+      this.saveState();
+      this.strokes = [];
+      this.clearSelection();
+      this.render();
+      if (this.onChange) this.onChange(this.getData());
+    }
+  }
+
+  getData() {
+    return this.strokes;
+  }
+
+  resize() {
+    const rect = this.canvasContainer.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    this.canvas.style.width = `${rect.width}px`;
+    this.canvas.style.height = `${rect.height}px`;
+    this.ctx.scale(dpr, dpr);
+    this.render();
+  }
+
+  render() {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Draw saved strokes
+    this.strokes.forEach(stroke => this.drawStroke(stroke));
+
+    // Draw current stroke
+    if (this.currentStroke) {
+      this.drawStroke(this.currentStroke);
+    }
+
+    // Draw Lasso path
+    if (this.lassoPoints.length > 0) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(this.lassoPoints[0].x, this.lassoPoints[0].y);
+      for (let i = 1; i < this.lassoPoints.length; i++) {
+        this.ctx.lineTo(this.lassoPoints[i].x, this.lassoPoints[i].y);
+      }
+      this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+      this.ctx.lineWidth = 1;
+      this.ctx.setLineDash([5, 5]);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+    }
+
+    // Draw Selection Bounding Box
+    if (this.selectedStrokes.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      this.selectedStrokes.forEach(s => {
+        s.points.forEach(p => {
+          if (p.x < minX) minX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y > maxY) maxY = p.y;
+        });
+      });
+      const pad = 5;
+      this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+      this.ctx.lineWidth = 1;
+      this.ctx.setLineDash([4, 4]);
+      this.ctx.strokeRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);
+      this.ctx.setLineDash([]);
+      
+      this.selectedStrokes.forEach(stroke => {
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.shadowColor = '#3b82f6';
+        this.ctx.shadowBlur = 10;
+        this.drawStroke(stroke, true);
+        this.ctx.restore();
+      });
+    }
+  }
+
+  drawStroke(stroke, isHighlight = false) {
+    if (stroke.points.length < 2) return;
+    
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.lineWidth = stroke.size;
+    this.ctx.strokeStyle = stroke.color;
+    this.ctx.globalAlpha = stroke.opacity || 1;
+
+    // Simulate highlighter blending
+    if (stroke.tool === 'highlighter' && !isHighlight) {
+       this.ctx.globalCompositeOperation = 'multiply'; // Works well on light backgrounds
+    } else {
+       this.ctx.globalCompositeOperation = 'source-over';
+    }
+
+    if (stroke.isShape) {
+      this.ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      this.ctx.lineTo(stroke.points[1].x, stroke.points[1].y);
+    } else {
+      this.ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length - 1; i++) {
+        const xc = (stroke.points[i].x + stroke.points[i + 1].x) / 2;
+        const yc = (stroke.points[i].y + stroke.points[i + 1].y) / 2;
+        this.ctx.quadraticCurveTo(stroke.points[i].x, stroke.points[i].y, xc, yc);
+      }
+      const last = stroke.points[stroke.points.length - 1];
+      this.ctx.lineTo(last.x, last.y);
+    }
+    
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+}
+
+window.NeonDrawingBoard = NeonDrawingBoard;

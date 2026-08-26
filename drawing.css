@@ -1,0 +1,116 @@
+.neon-drawing-wrapper {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--panel-border, #333);
+  border-radius: 8px;
+  background-color: var(--card-bg, #1e1e1e);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.neon-drawing-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--panel-border, #333);
+  gap: 8px;
+}
+
+.drawing-tools, .drawing-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.tool-btn, .action-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-color, #fff);
+  font-size: 1.2rem;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tool-btn:hover, .action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tool-btn.active {
+  background-color: var(--neon-accent, #eab308);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.drawing-settings {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 150px;
+}
+
+.setting-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.color-picker {
+  -webkit-appearance: none;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+}
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.color-picker::-webkit-color-swatch {
+  border: 2px solid #555;
+  border-radius: 50%;
+}
+
+.size-slider, .opacity-slider {
+  flex: 1;
+  cursor: pointer;
+  height: 4px;
+  background: #555;
+  border-radius: 2px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.size-slider::-webkit-slider-thumb, .opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--neon-accent, #eab308);
+  cursor: pointer;
+}
+
+.neon-drawing-canvas-container {
+  position: relative;
+  width: 100%;
+  min-height: 400px; /* Default height increased */
+  flex: 1;
+  background-color: transparent;
+  cursor: crosshair;
+}
+
+.neon-drawing-canvas-container canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* Crucial for mobile drawing */
+}

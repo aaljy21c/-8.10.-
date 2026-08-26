@@ -7202,19 +7202,7 @@ function renderTodos() {
       metaDiv.appendChild(timeBadge);
     }
 
-    // Created At Badge
-    if (todo.createdAt) {
-      const createdAtBadge = document.createElement('span');
-      createdAtBadge.style.fontSize = '0.7rem';
-      createdAtBadge.style.color = 'var(--text-muted)';
-      createdAtBadge.style.marginLeft = '6px';
-      const cDate = new Date(todo.createdAt);
-      const yy = String(cDate.getFullYear()).slice(2);
-      const mm = String(cDate.getMonth() + 1).padStart(2, '0');
-      const dd = String(cDate.getDate()).padStart(2, '0');
-      createdAtBadge.innerHTML = `(입력: ${yy}.${mm}.${dd})`;
-      metaDiv.appendChild(createdAtBadge);
-    }
+
 
     itemLeft.appendChild(checkbox);
     if (state.searchQuery.trim() !== '') {
@@ -7328,6 +7316,19 @@ function renderTodos() {
     if (state.selectedTodoIdForDates === todo.id) {
       const datesPanel = document.createElement('div');
       datesPanel.classList.add('todo-dates-panel');
+
+      if (todo.createdAt) {
+        const createdInfo = document.createElement('div');
+        createdInfo.style.fontSize = '0.75rem';
+        createdInfo.style.color = 'var(--text-muted)';
+        createdInfo.style.marginBottom = '12px';
+        const cDate = new Date(todo.createdAt);
+        const yy = String(cDate.getFullYear()).slice(2);
+        const mm = String(cDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(cDate.getDate()).padStart(2, '0');
+        createdInfo.innerHTML = `📅 등록일: ${yy}.${mm}.${dd}`;
+        datesPanel.appendChild(createdInfo);
+      }
 
       const panelTitle = document.createElement('div');
       panelTitle.classList.add('todo-dates-title');

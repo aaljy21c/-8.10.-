@@ -372,26 +372,41 @@ function init() {
         const draggedTodo = currentTodos.find(t => t.id === todoId);
         if (!draggedTodo) return;
 
-        // Find the new surrounding items
-        const prevItem = itemEl.previousElementSibling;
-        const nextItem = itemEl.nextElementSibling;
+        // Helper to check if two items share the same sorting group
+        const isSameGroup = (t1, t2) => {
+          return Boolean(t1.completed) === Boolean(t2.completed) && 
+                 Boolean(t1.isImportant) === Boolean(t2.isImportant) && 
+                 (t1.time || '') === (t2.time || '');
+        };
 
         let prevOrder = null;
         let nextOrder = null;
 
-        if (prevItem) {
-          const prevId = Number(prevItem.getAttribute('data-todo-id'));
-          const pt = currentTodos.find(t => t.id === prevId);
-          if (pt) prevOrder = pt.customOrder || pt.id;
+        // Traverse upwards to find the nearest item in the SAME group
+        let pNode = itemEl.previousElementSibling;
+        while (pNode) {
+          const pId = Number(pNode.getAttribute('data-todo-id'));
+          const pt = currentTodos.find(t => t.id === pId);
+          if (pt && isSameGroup(draggedTodo, pt)) {
+            prevOrder = pt.customOrder || pt.id;
+            break;
+          }
+          pNode = pNode.previousElementSibling;
         }
 
-        if (nextItem) {
-          const nextId = Number(nextItem.getAttribute('data-todo-id'));
-          const nt = currentTodos.find(t => t.id === nextId);
-          if (nt) nextOrder = nt.customOrder || nt.id;
+        // Traverse downwards to find the nearest item in the SAME group
+        let nNode = itemEl.nextElementSibling;
+        while (nNode) {
+          const nId = Number(nNode.getAttribute('data-todo-id'));
+          const nt = currentTodos.find(t => t.id === nId);
+          if (nt && isSameGroup(draggedTodo, nt)) {
+            nextOrder = nt.customOrder || nt.id;
+            break;
+          }
+          nNode = nNode.nextElementSibling;
         }
 
-        // Calculate new order
+        // Calculate new order within the same group
         if (prevOrder !== null && nextOrder !== null) {
           draggedTodo.customOrder = (prevOrder + nextOrder) / 2;
         } else if (prevOrder !== null) {

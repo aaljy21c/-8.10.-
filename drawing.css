@@ -16,9 +16,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgba(30, 30, 30, 0.95); /* Dark background with opacity for visibility */
   border-bottom: 1px solid var(--panel-border, #333);
   gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(4px); /* Slight blur effect for overlapping content */
 }
 
 .drawing-tools, .drawing-actions {

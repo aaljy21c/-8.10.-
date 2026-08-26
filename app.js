@@ -7542,7 +7542,6 @@ function renderTodos() {
       viewDrawingContainer.className = 'diary-drawing-container view-mode';
       viewDrawingContainer.style.marginTop = '6px';
       viewDrawingContainer.style.width = '100%';
-      viewDrawingContainer.style.maxWidth = '400px'; // Limit width slightly for todo list
 
       itemLeft.appendChild(viewDrawingContainer);
 
@@ -7558,7 +7557,6 @@ function renderTodos() {
       audioViewContainer.className = 'audio-previews-container';
       audioViewContainer.style.marginTop = '6px';
       audioViewContainer.style.width = '100%';
-      audioViewContainer.style.maxWidth = '400px';
       
       itemLeft.appendChild(audioViewContainer);
       

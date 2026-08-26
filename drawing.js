@@ -6,6 +6,8 @@ class NeonDrawingBoard {
 
     // Load initial data
     this.strokes = options.initialData ? JSON.parse(JSON.stringify(options.initialData)) : [];
+    const bgStroke = this.strokes.find(s => s.isBg);
+    this.bgColor = bgStroke ? bgStroke.color : '#1e1e1e';
     this.undoStack = [];
     this.redoStack = [];
 
@@ -24,6 +26,13 @@ class NeonDrawingBoard {
     this.holdTimer = null;
     this.isSnapped = false;
     this.penOnlyMode = false; // Pen Only mode (Palm rejection)
+    
+    // Pan and Zoom
+    this.viewScale = 1;
+    this.panX = 0;
+    this.panY = 0;
+    this.activePointers = new Map();
+    this.isPanning = false;
 
     // Lasso state
     this.lassoPoints = [];
@@ -63,6 +72,7 @@ class NeonDrawingBoard {
     // Canvas Container
     this.canvasContainer = document.createElement('div');
     this.canvasContainer.className = 'neon-drawing-canvas-container';
+    this.canvasContainer.style.backgroundColor = this.bgColor;
     
     this.canvas = document.createElement('canvas');
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
@@ -96,8 +106,13 @@ class NeonDrawingBoard {
       <div class="drawing-settings">
         <!-- Settings dynamically change based on tool -->
       </div>
+      <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto;">
+        <label for="btn-bg-color" style="font-size:0.8rem; cursor:pointer;" title="캔버스 배경색">🎨 배경</label>
+        <input type="color" class="color-picker" id="btn-bg-color" value="${this.bgColor}" title="배경색 변경" style="width:24px; height:24px; padding:0; border:none; cursor:pointer;">
+      </div>
       <div class="drawing-actions">
         <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
+        <button class="action-btn" id="btn-reset-view" title="1:1 화면 초기화">🔍</button>
         <button class="action-btn" id="btn-pen-mode" title="손가락 그리기 허용됨 (클릭하여 펜 전용 모드로 전환)">👆</button>
         <button class="action-btn" id="btn-undo" title="실행 취소">↩️</button>
         <button class="action-btn" id="btn-redo" title="다시 실행">↪️</button>
@@ -141,6 +156,28 @@ class NeonDrawingBoard {
       });
     }
 
+    const btnBgColor = this.toolbar.querySelector('#btn-bg-color');
+    if (btnBgColor) {
+      btnBgColor.addEventListener('input', (e) => {
+        this.bgColor = e.target.value;
+        this.canvasContainer.style.backgroundColor = this.bgColor;
+        this.strokes = this.strokes.filter(s => !s.isBg);
+        this.strokes.unshift({ isBg: true, color: this.bgColor });
+        this.saveState();
+      });
+    }
+
+    const btnResetView = this.toolbar.querySelector('#btn-reset-view');
+    if (btnResetView) {
+      btnResetView.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.viewScale = 1;
+        this.panX = 0;
+        this.panY = 0;
+        this.render();
+      });
+    }
+
     const btnSaveImage = this.toolbar.querySelector('#btn-save-image');
     if (btnSaveImage) {
       btnSaveImage.addEventListener('click', (e) => {
@@ -152,7 +189,7 @@ class NeonDrawingBoard {
         const tempCtx = tempCanvas.getContext('2d');
         
         // Fill background with card-bg color
-        tempCtx.fillStyle = '#1e1e1e';
+        tempCtx.fillStyle = this.bgColor;
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         
         // Draw the drawing canvas over it
@@ -182,21 +219,39 @@ class NeonDrawingBoard {
     this.settingsContainer.innerHTML = '';
     if (this.currentTool === 'pen') {
       this.settingsContainer.innerHTML = `
-        <div class="setting-group">
-          <input type="color" class="color-picker" value="${this.penColor}" id="pen-color">
+        <div class="setting-group" style="display:flex; align-items:center; gap:6px;">
+          <button class="preset-color" style="background:#ffffff; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#ffffff" title="흰색"></button>
+          <button class="preset-color" style="background:#ff4d4d; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#ff4d4d" title="빨간색"></button>
+          <button class="preset-color" style="background:#4da6ff; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#4da6ff" title="파란색"></button>
+          <input type="color" class="color-picker" value="${this.penColor}" id="pen-color" style="margin-left:4px;">
           <input type="range" class="size-slider" min="1" max="20" value="${this.penSize}" id="pen-size">
         </div>
       `;
+      this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
+        btn.addEventListener('click', e => {
+          this.penColor = e.target.dataset.color;
+          this.settingsContainer.querySelector('#pen-color').value = this.penColor;
+        });
+      });
       this.settingsContainer.querySelector('#pen-color').addEventListener('input', e => this.penColor = e.target.value);
       this.settingsContainer.querySelector('#pen-size').addEventListener('input', e => this.penSize = parseInt(e.target.value));
     } else if (this.currentTool === 'highlighter') {
       this.settingsContainer.innerHTML = `
-        <div class="setting-group">
-          <input type="color" class="color-picker" value="${this.highlighterColor}" id="hl-color">
+        <div class="setting-group" style="display:flex; align-items:center; gap:6px;">
+          <button class="preset-color" style="background:#facc15; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#facc15" title="노란색"></button>
+          <button class="preset-color" style="background:#ff7b72; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#ff7b72" title="주황색"></button>
+          <button class="preset-color" style="background:#79c0ff; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#79c0ff" title="하늘색"></button>
+          <input type="color" class="color-picker" value="${this.highlighterColor}" id="hl-color" style="margin-left:4px;">
           <input type="range" class="size-slider" min="5" max="50" value="${this.highlighterSize}" id="hl-size" title="굵기">
           <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.highlighterOpacity}" id="hl-opacity" title="농도">
         </div>
       `;
+      this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
+        btn.addEventListener('click', e => {
+          this.highlighterColor = e.target.dataset.color;
+          this.settingsContainer.querySelector('#hl-color').value = this.highlighterColor;
+        });
+      });
       this.settingsContainer.querySelector('#hl-color').addEventListener('input', e => this.highlighterColor = e.target.value);
       this.settingsContainer.querySelector('#hl-size').addEventListener('input', e => this.highlighterSize = parseInt(e.target.value));
       this.settingsContainer.querySelector('#hl-opacity').addEventListener('input', e => this.highlighterOpacity = parseFloat(e.target.value));
@@ -213,20 +268,46 @@ class NeonDrawingBoard {
   getPointerPos(e) {
     const rect = this.canvas.getBoundingClientRect();
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: ((e.clientX - rect.left) - this.panX) / this.viewScale,
+      y: ((e.clientY - rect.top) - this.panY) / this.viewScale
     };
   }
 
   onPointerDown(e) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
-    if (this.penOnlyMode && e.pointerType === 'touch') return; // Palm rejection
+    
+    this.isTempEraser = false;
+    if (e.pointerType === 'pen' && (e.button === 2 || e.button === 5 || (e.buttons & 2) || (e.buttons & 32))) {
+      this.isTempEraser = true;
+    }
+    
+    if (this.penOnlyMode && e.pointerType === 'touch') {
+      this.activePointers.set(e.pointerId, e);
+      if (this.activePointers.size < 2) return;
+    } else {
+      this.activePointers.set(e.pointerId, e);
+    }
+    
+    if (this.activePointers.size >= 2) {
+      this.isDrawing = false;
+      this.isPanning = true;
+      const pts = Array.from(this.activePointers.values());
+      this.initialPinchDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+      this.initialScale = this.viewScale;
+      const midX = (pts[0].clientX + pts[1].clientX) / 2;
+      const midY = (pts[0].clientY + pts[1].clientY) / 2;
+      const rect = this.canvas.getBoundingClientRect();
+      this.pinchPanStartX = (midX - rect.left) - this.panX;
+      this.pinchPanStartY = (midY - rect.top) - this.panY;
+      return;
+    }
     
     this.canvas.setPointerCapture(e.pointerId);
     
     const pos = this.getPointerPos(e);
+    const activeTool = this.isTempEraser ? 'eraser' : this.currentTool;
     
-    if (this.currentTool === 'lasso' && this.selectedStrokes.length > 0) {
+    if (activeTool === 'lasso' && this.selectedStrokes.length > 0) {
       if (this.isPointInSelectionBounds(pos)) {
         this.isDraggingSelection = true;
         this.dragStartPoint = pos;
@@ -241,19 +322,19 @@ class NeonDrawingBoard {
     this.isSnapped = false;
     this.points = [pos];
 
-    if (this.currentTool === 'pen' || this.currentTool === 'highlighter') {
+    if (activeTool === 'pen' || activeTool === 'highlighter') {
       this.currentStroke = {
-        tool: this.currentTool,
-        color: this.currentTool === 'pen' ? this.penColor : this.highlighterColor,
-        size: this.currentTool === 'pen' ? this.penSize : this.highlighterSize,
-        opacity: this.currentTool === 'pen' ? 1 : this.highlighterOpacity,
+        tool: activeTool,
+        color: activeTool === 'pen' ? this.penColor : this.highlighterColor,
+        size: activeTool === 'pen' ? this.penSize : this.highlighterSize,
+        opacity: activeTool === 'pen' ? 1 : this.highlighterOpacity,
         points: [...this.points],
         isShape: false
       };
       this.startHoldTimer();
-    } else if (this.currentTool === 'lasso') {
+    } else if (activeTool === 'lasso') {
       this.lassoPoints = [pos];
-    } else if (this.currentTool === 'eraser') {
+    } else if (activeTool === 'eraser') {
       this.eraseAt(pos);
     }
     
@@ -261,6 +342,28 @@ class NeonDrawingBoard {
   }
 
   onPointerMove(e) {
+    if (this.activePointers.has(e.pointerId)) {
+      this.activePointers.set(e.pointerId, e);
+    }
+    
+    if (this.isPanning && this.activePointers.size >= 2) {
+      const pts = Array.from(this.activePointers.values());
+      const currentDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+      const midX = (pts[0].clientX + pts[1].clientX) / 2;
+      const midY = (pts[0].clientY + pts[1].clientY) / 2;
+      const rect = this.canvas.getBoundingClientRect();
+      
+      let newScale = this.initialScale * (currentDist / (this.initialPinchDist || 1));
+      newScale = Math.max(0.2, Math.min(newScale, 5.0));
+      
+      this.viewScale = newScale;
+      this.panX = (midX - rect.left) - this.pinchPanStartX * (newScale / this.initialScale);
+      this.panY = (midY - rect.top) - this.pinchPanStartY * (newScale / this.initialScale);
+      
+      this.render();
+      return;
+    }
+
     const pos = this.getPointerPos(e);
 
     if (this.isDraggingSelection) {
@@ -279,16 +382,17 @@ class NeonDrawingBoard {
 
     // Auto-expand canvas height if drawing near the bottom
     const containerHeight = this.canvasContainer.clientHeight;
-    if (pos.y > containerHeight - 50) {
+    const physicalY = pos.y * this.viewScale + this.panY;
+    if (physicalY > containerHeight - 50) {
       this.canvasContainer.style.minHeight = `${containerHeight + 300}px`;
-      // ResizeObserver will handle the canvas resize automatically
     }
 
-    if (this.currentTool === 'pen' || this.currentTool === 'highlighter') {
+    const activeTool = this.isTempEraser ? 'eraser' : this.currentTool;
+
+    if (activeTool === 'pen' || activeTool === 'highlighter') {
       if (this.isSnapped && this.currentStroke) {
          this.currentStroke.points[this.currentStroke.points.length - 1] = pos;
       } else {
-         // Reset hold timer if moved more than a few pixels
          const lastPt = this.points[this.points.length - 1];
          if (Math.hypot(pos.x - lastPt.x, pos.y - lastPt.y) > 3) {
             this.resetHoldTimer();
@@ -296,9 +400,9 @@ class NeonDrawingBoard {
          this.points.push(pos);
          this.currentStroke.points.push(pos);
       }
-    } else if (this.currentTool === 'lasso') {
+    } else if (activeTool === 'lasso') {
       this.lassoPoints.push(pos);
-    } else if (this.currentTool === 'eraser') {
+    } else if (activeTool === 'eraser') {
       this.eraseAt(pos);
     }
     
@@ -306,6 +410,12 @@ class NeonDrawingBoard {
   }
 
   onPointerUp(e) {
+    this.activePointers.delete(e.pointerId);
+    if (this.isPanning && this.activePointers.size < 2) {
+      this.isPanning = false;
+      return;
+    }
+
     this.clearHoldTimer();
     
     if (this.isDraggingSelection) {
@@ -317,18 +427,21 @@ class NeonDrawingBoard {
     if (!this.isDrawing) return;
     this.isDrawing = false;
 
-    if (this.currentTool === 'pen' || this.currentTool === 'highlighter') {
+    const activeTool = this.isTempEraser ? 'eraser' : this.currentTool;
+
+    if (activeTool === 'pen' || activeTool === 'highlighter') {
       if (this.currentStroke && this.currentStroke.points.length > 1) {
         this.strokes.push(this.currentStroke);
         this.saveState();
       }
       this.currentStroke = null;
-    } else if (this.currentTool === 'lasso') {
+    } else if (activeTool === 'lasso') {
       this.applyLassoSelection();
       this.lassoPoints = [];
     }
 
     this.points = [];
+    this.isTempEraser = false;
     this.render();
   }
 
@@ -499,6 +612,11 @@ class NeonDrawingBoard {
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+    this.ctx.save();
+    // Apply pan and zoom
+    this.ctx.translate(this.panX, this.panY);
+    this.ctx.scale(this.viewScale, this.viewScale);
+
     // Draw saved strokes
     this.strokes.forEach(stroke => this.drawStroke(stroke));
 
@@ -515,8 +633,8 @@ class NeonDrawingBoard {
         this.ctx.lineTo(this.lassoPoints[i].x, this.lassoPoints[i].y);
       }
       this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-      this.ctx.lineWidth = 1;
-      this.ctx.setLineDash([5, 5]);
+      this.ctx.lineWidth = 1 / this.viewScale;
+      this.ctx.setLineDash([5 / this.viewScale, 5 / this.viewScale]);
       this.ctx.stroke();
       this.ctx.setLineDash([]);
     }
@@ -534,8 +652,8 @@ class NeonDrawingBoard {
       });
       const pad = 5;
       this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-      this.ctx.lineWidth = 1;
-      this.ctx.setLineDash([4, 4]);
+      this.ctx.lineWidth = 1 / this.viewScale;
+      this.ctx.setLineDash([4 / this.viewScale, 4 / this.viewScale]);
       this.ctx.strokeRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);
       this.ctx.setLineDash([]);
       
@@ -543,14 +661,17 @@ class NeonDrawingBoard {
         this.ctx.save();
         this.ctx.globalAlpha = 0.3;
         this.ctx.shadowColor = '#3b82f6';
-        this.ctx.shadowBlur = 10;
+        this.ctx.shadowBlur = 10 / this.viewScale;
         this.drawStroke(stroke, true);
         this.ctx.restore();
       });
     }
+
+    this.ctx.restore();
   }
 
   drawStroke(stroke, isHighlight = false) {
+    if (stroke.isBg) return;
     if (stroke.points.length < 2) return;
     
     this.ctx.save();

@@ -372,11 +372,10 @@ function init() {
         const draggedTodo = currentTodos.find(t => t.id === todoId);
         if (!draggedTodo) return;
 
-        // Helper to check if two items share the same sorting group
+        // Helper to check if two items share the same sorting group (ignoring time so they can be mixed freely)
         const isSameGroup = (t1, t2) => {
           return Boolean(t1.completed) === Boolean(t2.completed) && 
-                 Boolean(t1.isImportant) === Boolean(t2.isImportant) && 
-                 (t1.time || '') === (t2.time || '');
+                 Boolean(t1.isImportant) === Boolean(t2.isImportant);
         };
 
         let prevOrder = null;
@@ -435,6 +434,38 @@ function loadFromLocalStorage() {
     try {
       const parsedTodos = JSON.parse(savedTodos);
       state.todos = (parsedTodos && typeof parsedTodos === 'object') ? parsedTodos : {};
+      
+      // Migration: Preserve existing auto-sort order (including time) into customOrder permanently
+      let migrated = false;
+      Object.keys(state.todos).forEach(dateKey => {
+        let dayTodos = state.todos[dateKey];
+        if (Array.isArray(dayTodos)) {
+          // Sort them how they used to be sorted
+          const sorted = [...dayTodos].sort((a, b) => {
+            if (a.completed !== b.completed) return a.completed ? 1 : -1;
+            const isImpA = Boolean(a.isImportant);
+            const isImpB = Boolean(b.isImportant);
+            if (isImpA !== isImpB) return isImpA ? -1 : 1;
+            const timeA = a.time || "";
+            const timeB = b.time || "";
+            if (timeA && timeB) return timeA.localeCompare(timeB);
+            if (timeA) return -1;
+            if (timeB) return 1;
+            return (a.customOrder || a.id) - (b.customOrder || b.id);
+          });
+          
+          // Reassign customOrder strictly based on this index if it hasn't been migrated yet
+          // Date.now() is around 1700000000000, we'll use spaced small numbers (e.g., 100000, 200000)
+          sorted.forEach((t, i) => {
+            if (!t.customOrder || t.customOrder > 1000000000000) {
+              t.customOrder = (i + 1) * 100000;
+              migrated = true;
+            }
+          });
+        }
+      });
+      if (migrated) saveTodos();
+      
     } catch (e) {
       console.error(e);
       state.todos = {};
@@ -7109,14 +7140,7 @@ function renderTodos() {
       return isImpA ? -1 : 1;
     }
     
-    const timeA = a.time || "";
-    const timeB = b.time || "";
-    if (timeA && timeB) {
-      return timeA.localeCompare(timeB);
-    }
-    if (timeA) return -1;
-    if (timeB) return 1;
-    
+    // Auto-sorting by time has been removed so customOrder fully dictates the order
     return (a.customOrder || a.id) - (b.customOrder || b.id);
   });
 

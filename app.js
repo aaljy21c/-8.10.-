@@ -351,6 +351,13 @@ function init() {
     Sortable.create(todoItemsList, {
       delay: 400, // 400ms long press to drag on mobile
       delayOnTouchOnly: true,
+      touchStartThreshold: 5,
+      fallbackTolerance: 5,
+      forceFallback: true,
+      fallbackOnBody: true,
+      scroll: true,
+      scrollSensitivity: 80,
+      scrollSpeed: 15,
       animation: 150,
       ghostClass: 'sortable-ghost',
       onEnd: function (evt) {

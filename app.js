@@ -523,30 +523,19 @@ function loadFromLocalStorage() {
   const savedTheme = localStorage.getItem('neon_planner_theme');
   if (savedTheme) state.theme = savedTheme;
 
+  // Panels should be hidden by default on app load
+  state.showControlPanel = false;
+  state.showAnalytics = false;
+  state.showTimeline = false;
+  state.showRoutines = false;
+  state.showDdays = false;
+  
+  // (Optional: remove or ignore the saved values for these states)
   const savedShowControlPanel = localStorage.getItem('neon_planner_show_control_panel');
-  if (savedShowControlPanel !== null) {
-    state.showControlPanel = savedShowControlPanel === 'true';
-  }
-
   const savedShowAnalytics = localStorage.getItem('neon_planner_show_analytics');
-  if (savedShowAnalytics !== null) {
-    state.showAnalytics = savedShowAnalytics === 'true';
-  }
-
   const savedShowTimeline = localStorage.getItem('neon_planner_show_timeline');
-  if (savedShowTimeline !== null) {
-    state.showTimeline = savedShowTimeline === 'true';
-  }
-
   const savedShowRoutines = localStorage.getItem('neon_planner_show_routines');
-  if (savedShowRoutines !== null) {
-    state.showRoutines = savedShowRoutines === 'true';
-  }
-
   const savedShowDdays = localStorage.getItem('neon_planner_show_ddays');
-  if (savedShowDdays !== null) {
-    state.showDdays = savedShowDdays === 'true';
-  }
 
   // Load categories (handles migration from older format)
   const savedCategories = localStorage.getItem('neon_planner_categories');
@@ -5321,26 +5310,36 @@ function renderDiary() {
         }
 
         if (record.drawing && record.drawing.length > 0) {
-          const toggleBtn = document.createElement('div');
-          toggleBtn.className = 'record-drawing-toggle';
-          toggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭하여 펼치기)';
-          toggleBtn.style.cssText = 'cursor:pointer; color:#3b82f6; font-size:0.9rem; margin-top:8px; padding:8px; background:var(--panel-bg, rgba(255,255,255,0.05)); border-radius:4px; text-align:center; border: 1px dashed var(--panel-border, #333);';
-          card.appendChild(toggleBtn);
+          const drawingToggleBtn = document.createElement('div');
+          drawingToggleBtn.className = 'record-drawing-toggle';
+          drawingToggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭하여 펼치기)';
+          drawingToggleBtn.style.cssText = 'cursor:pointer; color:#3b82f6; font-size:0.9rem; margin-top:8px; padding:8px; background:var(--panel-bg, rgba(255,255,255,0.05)); border-radius:4px; text-align:center; border: 1px dashed var(--panel-border, #333);';
+          card.appendChild(drawingToggleBtn);
           
           const viewDrawingContainer = document.createElement('div');
           viewDrawingContainer.className = 'diary-drawing-container view-mode';
           viewDrawingContainer.style.display = 'none';
           card.appendChild(viewDrawingContainer);
 
-          toggleBtn.addEventListener('click', (e) => {
+          drawingToggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            toggleBtn.style.display = 'none';
+            drawingToggleBtn.style.display = 'none';
             viewDrawingContainer.style.display = 'block';
             new NeonDrawingBoard(viewDrawingContainer, {
               initialData: record.drawing,
               readOnly: true
             });
           });
+          
+          viewDrawingContainer.style.cursor = 'pointer';
+          viewDrawingContainer.title = '클릭하여 일기 수정하기';
+          const openEdit = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            openRecordEditor(record.id);
+          };
+          viewDrawingContainer.addEventListener('click', openEdit);
+          viewDrawingContainer.addEventListener('contextmenu', openEdit);
         }
 
         if (record.audio && record.audio.length > 0) {
@@ -7552,11 +7551,11 @@ function renderTodos() {
     // Memo Drawing rendering
     // Memo Drawing rendering
     if (todo.memoDrawing && todo.memoDrawing.length > 0) {
-      const toggleBtn = document.createElement('div');
-      toggleBtn.className = 'record-drawing-toggle';
-      toggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭)';
-      toggleBtn.style.cssText = 'cursor:pointer; color:#3b82f6; font-size:0.85rem; margin-top:6px; padding:6px; background:var(--panel-bg, rgba(255,255,255,0.05)); border-radius:4px; text-align:center; border: 1px dashed var(--panel-border, #333);';
-      itemLeft.appendChild(toggleBtn);
+      const drawingToggleBtn = document.createElement('div');
+      drawingToggleBtn.className = 'record-drawing-toggle';
+      drawingToggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭)';
+      drawingToggleBtn.style.cssText = 'cursor:pointer; color:#3b82f6; font-size:0.85rem; margin-top:6px; padding:6px; background:var(--panel-bg, rgba(255,255,255,0.05)); border-radius:4px; text-align:center; border: 1px dashed var(--panel-border, #333);';
+      itemLeft.appendChild(drawingToggleBtn);
 
       const viewDrawingContainer = document.createElement('div');
       viewDrawingContainer.className = 'diary-drawing-container view-mode';
@@ -7565,15 +7564,25 @@ function renderTodos() {
       viewDrawingContainer.style.display = 'none';
       itemLeft.appendChild(viewDrawingContainer);
 
-      toggleBtn.addEventListener('click', (e) => {
+      drawingToggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        toggleBtn.style.display = 'none';
+        drawingToggleBtn.style.display = 'none';
         viewDrawingContainer.style.display = 'block';
         new NeonDrawingBoard(viewDrawingContainer, {
           initialData: todo.memoDrawing,
           readOnly: true
         });
       });
+      
+      viewDrawingContainer.style.cursor = 'pointer';
+      viewDrawingContainer.title = '클릭하여 할 일 수정하기';
+      const openEdit = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        openTodoEditModal(todo.id);
+      };
+      viewDrawingContainer.addEventListener('click', openEdit);
+      viewDrawingContainer.addEventListener('contextmenu', openEdit);
     }
 
     // Memo Audio rendering
@@ -7848,6 +7857,18 @@ function setupHeaderGDriveSync() {
     if (mBackup && hBackup) hBackup.disabled = mBackup.disabled;
     if (mRestore && hRestore) hRestore.disabled = mRestore.disabled;
     if (mLogout && hLogout) hLogout.style.display = mLogout.style.display;
+
+    if (hLogin && mLogout) {
+      if (mLogout.style.display !== 'none') {
+        // Connected
+        hLogin.style.borderColor = '#fbbf24'; // Yellow matching key icon
+        hLogin.style.borderWidth = '2px';
+      } else {
+        // Not connected
+        hLogin.style.borderColor = 'var(--panel-border)';
+        hLogin.style.borderWidth = '1px';
+      }
+    }
   }, 300);
 }
 

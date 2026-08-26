@@ -29,7 +29,7 @@ class NeonDrawingBoard {
     this.points = [];
     this.holdTimer = null;
     this.isSnapped = false;
-    this.penOnlyMode = false; // Pen Only mode (Palm rejection)
+    this.penOnlyMode = true; // Pen Only mode (Palm rejection) by default
     
     // Pan and Zoom
     this.viewScale = 1;
@@ -110,9 +110,16 @@ class NeonDrawingBoard {
       <div class="drawing-settings">
         <!-- Settings dynamically change based on tool -->
       </div>
-      <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto;">
-        <button class="action-btn" id="btn-trigger-bg-color" title="배경색 변경">🎨 배경 변경</button>
-        <input type="color" class="color-picker" id="btn-bg-color" value="${this.bgColor}" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
+      <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto; border-left: 1px solid #444; padding-left: 8px;">
+        <span style="font-size:0.8rem; color:#aaa; margin-right:4px;">배경지</span>
+        <div class="bg-presets" style="display:flex; gap:4px;">
+          <button class="bg-preset-btn" data-color="#1e1e1e" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#1e1e1e' ? '#3b82f6' : '#555'}; background-color:#1e1e1e; cursor:pointer;" title="기본(어두운색)"></button>
+          <button class="bg-preset-btn" data-color="#ffffff" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffffff' ? '#3b82f6' : '#ccc'}; background-color:#ffffff; cursor:pointer;" title="흰색"></button>
+          <button class="bg-preset-btn" data-color="#fdfd96" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#fdfd96' ? '#3b82f6' : '#ccc'}; background-color:#fdfd96; cursor:pointer;" title="연노랑"></button>
+          <button class="bg-preset-btn" data-color="#b5ead7" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#b5ead7' ? '#3b82f6' : '#ccc'}; background-color:#b5ead7; cursor:pointer;" title="연민트"></button>
+          <button class="bg-preset-btn" data-color="#ffb7b2" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffb7b2' ? '#3b82f6' : '#ccc'}; background-color:#ffb7b2; cursor:pointer;" title="연분홍"></button>
+          <button class="bg-preset-btn" data-color="#c7ceea" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#c7ceea' ? '#3b82f6' : '#ccc'}; background-color:#c7ceea; cursor:pointer;" title="연파랑"></button>
+        </div>
       </div>
       <div class="drawing-actions">
         <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
@@ -160,21 +167,23 @@ class NeonDrawingBoard {
       });
     }
 
-    const btnBgColor = this.toolbar.querySelector('#btn-bg-color');
-    const btnTriggerBgColor = this.toolbar.querySelector('#btn-trigger-bg-color');
-    if (btnBgColor && btnTriggerBgColor) {
-      btnTriggerBgColor.addEventListener('click', (e) => {
+    const bgPresetBtns = this.toolbar.querySelectorAll('.bg-preset-btn');
+    bgPresetBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
         e.preventDefault();
-        btnBgColor.click();
-      });
-      btnBgColor.addEventListener('input', (e) => {
-        this.bgColor = e.target.value;
+        this.bgColor = btn.dataset.color;
         this.canvasContainer.style.backgroundColor = this.bgColor;
         this.strokes = this.strokes.filter(s => !s.isBg);
         this.strokes.unshift({ isBg: true, color: this.bgColor });
         this.saveState();
+        
+        // Update active styling
+        bgPresetBtns.forEach(b => {
+          b.style.borderColor = (b.dataset.color === '#1e1e1e') ? '#555' : '#ccc';
+        });
+        btn.style.borderColor = '#3b82f6';
       });
-    }
+    });
 
     const btnResetView = this.toolbar.querySelector('#btn-reset-view');
     if (btnResetView) {
@@ -531,7 +540,7 @@ class NeonDrawingBoard {
         this.currentStroke.shapeType = 'line';
         this.render();
       }
-    }, 600);
+    }, 1000);
   }
 
   resetHoldTimer() {
@@ -669,6 +678,42 @@ class NeonDrawingBoard {
     return this.strokes;
   }
 
+  fitContent() {
+    if (!this.strokes || this.strokes.length === 0) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let hasStrokes = false;
+    this.strokes.forEach(s => {
+      if (s.isBg) return;
+      if (!s.points || s.points.length === 0) return;
+      const size = s.size || 2;
+      hasStrokes = true;
+      s.points.forEach(p => {
+        if (p.x - size < minX) minX = p.x - size;
+        if (p.y - size < minY) minY = p.y - size;
+        if (p.x + size > maxX) maxX = p.x + size;
+        if (p.y + size > maxY) maxY = p.y + size;
+      });
+    });
+    if (!hasStrokes) return;
+
+    const padding = 20;
+    const contentWidth = maxX - minX + padding * 2;
+    const contentHeight = maxY - minY + padding * 2;
+    if (contentWidth <= 0 || contentHeight <= 0) return;
+
+    const rect = this.canvasContainer.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const scaleX = rect.width / contentWidth;
+    const scaleY = rect.height / contentHeight;
+    this.viewScale = Math.min(scaleX, scaleY, 1);
+
+    const scaledWidth = (maxX - minX + padding * 2) * this.viewScale;
+    const scaledHeight = (maxY - minY + padding * 2) * this.viewScale;
+    this.panX = (rect.width - scaledWidth) / 2 - (minX - padding) * this.viewScale;
+    this.panY = (rect.height - scaledHeight) / 2 - (minY - padding) * this.viewScale;
+  }
+
   resize() {
     const rect = this.canvasContainer.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
@@ -679,6 +724,11 @@ class NeonDrawingBoard {
     this.canvas.style.width = `${rect.width}px`;
     this.canvas.style.height = `${rect.height}px`;
     this.ctx.scale(dpr, dpr);
+    
+    if (this.readOnly) {
+      this.fitContent();
+    }
+    
     this.render();
   }
 

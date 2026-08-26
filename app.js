@@ -5321,13 +5321,25 @@ function renderDiary() {
         }
 
         if (record.drawing && record.drawing.length > 0) {
+          const toggleBtn = document.createElement('div');
+          toggleBtn.className = 'record-drawing-toggle';
+          toggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭하여 펼치기)';
+          toggleBtn.style.cssText = 'cursor:pointer; color:#3b82f6; font-size:0.9rem; margin-top:8px; padding:8px; background:var(--panel-bg, rgba(255,255,255,0.05)); border-radius:4px; text-align:center; border: 1px dashed var(--panel-border, #333);';
+          card.appendChild(toggleBtn);
+          
           const viewDrawingContainer = document.createElement('div');
           viewDrawingContainer.className = 'diary-drawing-container view-mode';
+          viewDrawingContainer.style.display = 'none';
           card.appendChild(viewDrawingContainer);
 
-          new NeonDrawingBoard(viewDrawingContainer, {
-            initialData: record.drawing,
-            readOnly: true
+          toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleBtn.style.display = 'none';
+            viewDrawingContainer.style.display = 'block';
+            new NeonDrawingBoard(viewDrawingContainer, {
+              initialData: record.drawing,
+              readOnly: true
+            });
           });
         }
 
@@ -7491,6 +7503,7 @@ function renderTodos() {
       });
       itemLeft.appendChild(datePill);
     }
+    itemLeft.insertBefore(checkbox, itemLeft.firstChild);
     itemLeft.appendChild(textSpan);
     itemLeft.appendChild(metaDiv);
     
@@ -7537,17 +7550,29 @@ function renderTodos() {
     }
 
     // Memo Drawing rendering
+    // Memo Drawing rendering
     if (todo.memoDrawing && todo.memoDrawing.length > 0) {
+      const toggleBtn = document.createElement('div');
+      toggleBtn.className = 'record-drawing-toggle';
+      toggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭)';
+      toggleBtn.style.cssText = 'cursor:pointer; color:#3b82f6; font-size:0.85rem; margin-top:6px; padding:6px; background:var(--panel-bg, rgba(255,255,255,0.05)); border-radius:4px; text-align:center; border: 1px dashed var(--panel-border, #333);';
+      itemLeft.appendChild(toggleBtn);
+
       const viewDrawingContainer = document.createElement('div');
       viewDrawingContainer.className = 'diary-drawing-container view-mode';
       viewDrawingContainer.style.marginTop = '6px';
       viewDrawingContainer.style.width = '100%';
-
+      viewDrawingContainer.style.display = 'none';
       itemLeft.appendChild(viewDrawingContainer);
 
-      new NeonDrawingBoard(viewDrawingContainer, {
-        initialData: todo.memoDrawing,
-        readOnly: true
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleBtn.style.display = 'none';
+        viewDrawingContainer.style.display = 'block';
+        new NeonDrawingBoard(viewDrawingContainer, {
+          initialData: todo.memoDrawing,
+          readOnly: true
+        });
       });
     }
 

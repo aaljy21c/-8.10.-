@@ -15,9 +15,13 @@ class NeonDrawingBoard {
     this.currentTool = 'pen'; // pen, highlighter, eraser, lasso
     this.penColor = '#ffffff';
     this.penSize = 2;
+    this.penOpacity = 1.0;
     this.highlighterColor = '#facc15';
     this.highlighterSize = 15;
     this.highlighterOpacity = 0.4;
+    
+    this.penPresets = JSON.parse(localStorage.getItem('planeer_pen_presets')) || ['#ffffff', '#ff4d4d', '#4da6ff'];
+    this.hlPresets = JSON.parse(localStorage.getItem('planeer_hl_presets')) || ['#facc15', '#ff7b72', '#79c0ff'];
 
     // Interaction state
     this.isDrawing = false;
@@ -107,8 +111,8 @@ class NeonDrawingBoard {
         <!-- Settings dynamically change based on tool -->
       </div>
       <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto;">
-        <label for="btn-bg-color" style="font-size:0.8rem; cursor:pointer;" title="캔버스 배경색">🎨 배경</label>
-        <input type="color" class="color-picker" id="btn-bg-color" value="${this.bgColor}" title="배경색 변경" style="width:24px; height:24px; padding:0; border:none; cursor:pointer;">
+        <button class="action-btn" id="btn-trigger-bg-color" title="배경색 변경">🎨 배경 변경</button>
+        <input type="color" class="color-picker" id="btn-bg-color" value="${this.bgColor}" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
       </div>
       <div class="drawing-actions">
         <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
@@ -157,7 +161,12 @@ class NeonDrawingBoard {
     }
 
     const btnBgColor = this.toolbar.querySelector('#btn-bg-color');
-    if (btnBgColor) {
+    const btnTriggerBgColor = this.toolbar.querySelector('#btn-trigger-bg-color');
+    if (btnBgColor && btnTriggerBgColor) {
+      btnTriggerBgColor.addEventListener('click', (e) => {
+        e.preventDefault();
+        btnBgColor.click();
+      });
       btnBgColor.addEventListener('input', (e) => {
         this.bgColor = e.target.value;
         this.canvasContainer.style.backgroundColor = this.bgColor;
@@ -217,44 +226,108 @@ class NeonDrawingBoard {
 
   updateSettingsUI() {
     this.settingsContainer.innerHTML = '';
+    
+    const renderPresets = (presets) => {
+      return presets.map((color, idx) => 
+        `<button class="preset-color" style="background:${color}; width:24px; height:24px; border-radius:50%; border:1px solid #555; cursor:pointer; padding:0;" data-index="${idx}" data-color="${color}" title="길게 누르면 색상 변경"></button>`
+      ).join('');
+    };
+
     if (this.currentTool === 'pen') {
       this.settingsContainer.innerHTML = `
         <div class="setting-group" style="display:flex; align-items:center; gap:6px;">
-          <button class="preset-color" style="background:#ffffff; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#ffffff" title="흰색"></button>
-          <button class="preset-color" style="background:#ff4d4d; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#ff4d4d" title="빨간색"></button>
-          <button class="preset-color" style="background:#4da6ff; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#4da6ff" title="파란색"></button>
-          <input type="color" class="color-picker" value="${this.penColor}" id="pen-color" style="margin-left:4px;">
-          <input type="range" class="size-slider" min="1" max="20" value="${this.penSize}" id="pen-size">
+          ${renderPresets(this.penPresets)}
+          <input type="color" class="color-picker" id="hidden-preset-picker" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
+          <input type="color" class="color-picker" value="${this.penColor}" id="pen-color" style="margin-left:4px;" title="색상 지정">
+          <input type="range" class="size-slider" min="1" max="20" value="${this.penSize}" id="pen-size" title="굵기">
+          <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.penOpacity}" id="pen-opacity" title="농도">
         </div>
       `;
-      this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
-        btn.addEventListener('click', e => {
-          this.penColor = e.target.dataset.color;
-          this.settingsContainer.querySelector('#pen-color').value = this.penColor;
-        });
-      });
-      this.settingsContainer.querySelector('#pen-color').addEventListener('input', e => this.penColor = e.target.value);
-      this.settingsContainer.querySelector('#pen-size').addEventListener('input', e => this.penSize = parseInt(e.target.value));
     } else if (this.currentTool === 'highlighter') {
       this.settingsContainer.innerHTML = `
         <div class="setting-group" style="display:flex; align-items:center; gap:6px;">
-          <button class="preset-color" style="background:#facc15; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#facc15" title="노란색"></button>
-          <button class="preset-color" style="background:#ff7b72; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#ff7b72" title="주황색"></button>
-          <button class="preset-color" style="background:#79c0ff; width:20px; height:20px; border-radius:50%; border:1px solid #555; cursor:pointer;" data-color="#79c0ff" title="하늘색"></button>
-          <input type="color" class="color-picker" value="${this.highlighterColor}" id="hl-color" style="margin-left:4px;">
+          ${renderPresets(this.hlPresets)}
+          <input type="color" class="color-picker" id="hidden-preset-picker" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
+          <input type="color" class="color-picker" value="${this.highlighterColor}" id="hl-color" style="margin-left:4px;" title="색상 지정">
           <input type="range" class="size-slider" min="5" max="50" value="${this.highlighterSize}" id="hl-size" title="굵기">
           <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.highlighterOpacity}" id="hl-opacity" title="농도">
         </div>
       `;
+    }
+
+    if (this.currentTool === 'pen' || this.currentTool === 'highlighter') {
+      const isPen = this.currentTool === 'pen';
+      const colorInputId = isPen ? '#pen-color' : '#hl-color';
+      const sizeInputId = isPen ? '#pen-size' : '#hl-size';
+      const opacityInputId = isPen ? '#pen-opacity' : '#hl-opacity';
+      
+      const hiddenPicker = this.settingsContainer.querySelector('#hidden-preset-picker');
+      let targetPresetIndex = -1;
+
+      hiddenPicker.addEventListener('input', e => {
+        if (targetPresetIndex >= 0) {
+          const newColor = e.target.value;
+          const presets = isPen ? this.penPresets : this.hlPresets;
+          presets[targetPresetIndex] = newColor;
+          localStorage.setItem(isPen ? 'planeer_pen_presets' : 'planeer_hl_presets', JSON.stringify(presets));
+          this.updateSettingsUI();
+          if (isPen) this.penColor = newColor;
+          else this.highlighterColor = newColor;
+          this.settingsContainer.querySelector(colorInputId).value = newColor;
+        }
+      });
+
       this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
-        btn.addEventListener('click', e => {
-          this.highlighterColor = e.target.dataset.color;
-          this.settingsContainer.querySelector('#hl-color').value = this.highlighterColor;
+        let pressTimer;
+        
+        const startPress = (e) => {
+          if (e.type === 'touchstart') e.preventDefault(); // Prevent text selection on mobile
+          pressTimer = setTimeout(() => {
+            targetPresetIndex = parseInt(btn.dataset.index);
+            hiddenPicker.value = btn.dataset.color;
+            hiddenPicker.click();
+            pressTimer = null;
+          }, 500);
+        };
+        
+        const endPress = (e) => {
+          if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+            const color = btn.dataset.color;
+            if (isPen) this.penColor = color;
+            else this.highlighterColor = color;
+            this.settingsContainer.querySelector(colorInputId).value = color;
+          }
+        };
+
+        btn.addEventListener('mousedown', startPress);
+        btn.addEventListener('touchstart', startPress, {passive: false});
+        btn.addEventListener('mouseup', endPress);
+        btn.addEventListener('mouseleave', () => { if(pressTimer) clearTimeout(pressTimer); });
+        btn.addEventListener('touchend', endPress);
+        
+        btn.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          if(pressTimer) clearTimeout(pressTimer);
+          targetPresetIndex = parseInt(btn.dataset.index);
+          hiddenPicker.value = btn.dataset.color;
+          hiddenPicker.click();
         });
       });
-      this.settingsContainer.querySelector('#hl-color').addEventListener('input', e => this.highlighterColor = e.target.value);
-      this.settingsContainer.querySelector('#hl-size').addEventListener('input', e => this.highlighterSize = parseInt(e.target.value));
-      this.settingsContainer.querySelector('#hl-opacity').addEventListener('input', e => this.highlighterOpacity = parseFloat(e.target.value));
+
+      this.settingsContainer.querySelector(colorInputId).addEventListener('input', e => {
+        if (isPen) this.penColor = e.target.value;
+        else this.highlighterColor = e.target.value;
+      });
+      this.settingsContainer.querySelector(sizeInputId).addEventListener('input', e => {
+        if (isPen) this.penSize = parseInt(e.target.value);
+        else this.highlighterSize = parseInt(e.target.value);
+      });
+      this.settingsContainer.querySelector(opacityInputId).addEventListener('input', e => {
+        if (isPen) this.penOpacity = parseFloat(e.target.value);
+        else this.highlighterOpacity = parseFloat(e.target.value);
+      });
     }
   }
 
@@ -327,7 +400,7 @@ class NeonDrawingBoard {
         tool: activeTool,
         color: activeTool === 'pen' ? this.penColor : this.highlighterColor,
         size: activeTool === 'pen' ? this.penSize : this.highlighterSize,
-        opacity: activeTool === 'pen' ? 1 : this.highlighterOpacity,
+        opacity: activeTool === 'pen' ? this.penOpacity : this.highlighterOpacity,
         points: [...this.points],
         isShape: false
       };

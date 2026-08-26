@@ -390,10 +390,10 @@
               </div>
               <div id="new-record-audio-previews" class="audio-previews-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;"></div>
               
-              <label class="diary-photo-upload-label" style="margin-top:10px; display:block;">
-                <span class="upload-icon">🎨</span> 손그림 그리기
-              </label>
-              <div id="new-record-drawing-container" class="diary-drawing-container"></div>
+              <button type="button" id="btn-toggle-new-record-drawing" class="diary-photo-upload-label" style="margin-top:10px; display:block; width:100%; text-align:left; background:transparent; border:none; cursor:pointer;">
+                <span class="upload-icon">🎨</span> 손그림 그리기 (열기/닫기)
+              </button>
+              <div id="new-record-drawing-container" class="diary-drawing-container hidden" style="display: none;"></div>
 
               <div class="record-actions">
                 <button type="button" id="btn-save-new-record" class="record-btn save">💾 등록하기</button>
@@ -756,10 +756,10 @@
 
       <!-- Drawing -->
       <div class="todo-modal-field">
-        <label class="todo-modal-label" style="display: block; font-size: 0.8rem; margin-bottom: 6px;">
-          <span class="upload-icon">🎨</span> 손그림 그리기
-        </label>
-        <div id="todo-edit-modal-drawing-container" class="diary-drawing-container"></div>
+        <button type="button" id="btn-toggle-todo-modal-drawing" class="todo-modal-label" style="display: block; width: 100%; text-align: left; background: transparent; border: none; font-size: 0.8rem; margin-bottom: 6px; cursor: pointer;">
+          <span class="upload-icon">🎨</span> 손그림 그리기 (열기/닫기)
+        </button>
+        <div id="todo-edit-modal-drawing-container" class="diary-drawing-container hidden" style="display: none;"></div>
       </div>
       
       <div class="todo-modal-field">

@@ -5224,15 +5224,32 @@ function renderDiary() {
         card.appendChild(previewsContainer);
 
         // Drawing Board for Edit Mode
-        const drawingLabel = document.createElement('label');
+        const drawingLabel = document.createElement('button');
+        drawingLabel.type = 'button';
         drawingLabel.className = 'diary-photo-upload-label';
         drawingLabel.style.marginTop = '10px';
-        drawingLabel.innerHTML = '<span class="upload-icon">🎨</span> 손그림 그리기';
+        drawingLabel.style.display = 'block';
+        drawingLabel.style.width = '100%';
+        drawingLabel.style.textAlign = 'left';
+        drawingLabel.style.background = 'transparent';
+        drawingLabel.style.border = 'none';
+        drawingLabel.style.cursor = 'pointer';
+        drawingLabel.innerHTML = '<span class="upload-icon">🎨</span> 손그림 그리기 (열기/닫기)';
         card.appendChild(drawingLabel);
 
         const drawingContainer = document.createElement('div');
-        drawingContainer.className = 'diary-drawing-container';
+        drawingContainer.className = 'diary-drawing-container hidden';
+        drawingContainer.style.display = 'none';
         card.appendChild(drawingContainer);
+
+        drawingLabel.addEventListener('click', () => {
+          drawingContainer.classList.toggle('hidden');
+          if (drawingContainer.classList.contains('hidden')) {
+            drawingContainer.style.display = 'none';
+          } else {
+            drawingContainer.style.display = 'block';
+          }
+        });
 
         new NeonDrawingBoard(drawingContainer, {
           initialData: state.diaryDraftDrawing || [],
@@ -5339,6 +5356,70 @@ function renderDiary() {
           renderDiary();
         });
         actionsRow.appendChild(editBtn);
+
+        const exportBtn = document.createElement('button');
+        exportBtn.type = 'button';
+        exportBtn.className = 'record-btn';
+        exportBtn.innerHTML = '💾 저장';
+        exportBtn.title = '이 일기를 파일(HTML)로 저장합니다';
+        exportBtn.addEventListener('click', () => {
+          let htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>일기 기록 - ${dateKey}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; line-height: 1.6; background: #fafafa; color: #333; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+  h2 { color: #222; border-bottom: 2px solid #eaeaea; padding-bottom: 10px; margin-top: 0; }
+  h3 { color: #555; margin-top: 24px; font-size: 1.1rem; }
+  img { max-width: 100%; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  audio { width: 100%; margin-bottom: 8px; outline: none; }
+  .text-content { white-space: pre-wrap; margin-bottom: 20px; font-size: 1.05rem; }
+  .drawing-img { border: 1px solid #ddd; }
+</style>
+</head>
+<body>
+  <h2>📅 일기 기록 (${dateKey})</h2>
+  <div class="text-content">${(record.text || '').replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+`;
+          if (record.images && record.images.length > 0) {
+             htmlContent += `<h3>📷 사진</h3>`;
+             record.images.forEach(img => {
+                htmlContent += `<img src="${img.src || img}">`;
+             });
+          }
+          if (record.audio && record.audio.length > 0) {
+             htmlContent += `<h3>🎙️ 음성 녹음</h3>`;
+             record.audio.forEach(a => {
+                htmlContent += `<audio controls src="${a.src || a}"></audio>`;
+             });
+          }
+          if (record.drawing && record.drawing.length > 0) {
+             const canvas = card.querySelector('.diary-drawing-container canvas');
+             if (canvas) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const ctx = tempCanvas.getContext('2d');
+                ctx.fillStyle = '#1e1e1e';
+                ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                ctx.drawImage(canvas, 0, 0);
+                htmlContent += `<h3>🎨 손그림</h3><img class="drawing-img" src="${tempCanvas.toDataURL('image/png')}">`;
+             }
+          }
+          htmlContent += `</body></html>`;
+          
+          const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          a.download = `diary_${dateStr}_${record.id}.html`;
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+        actionsRow.appendChild(exportBtn);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
@@ -8187,6 +8268,31 @@ document.addEventListener('DOMContentLoaded', () => {
     () => renderAudioPreviews('new-record-audio-previews', state.diaryDraftAudio, () => renderAudioPreviews('new-record-audio-previews', state.diaryDraftAudio, null)) // Will hook to renderDiary later
   );
   
-  // Note: todo modal is dynamic, but we can attach a global listener or attach every time.
-  // We'll attach it dynamically inside openTodoEditModal.
+  // Toggle New Record Drawing Board
+  const btnToggleNewRecordDrawing = document.getElementById('btn-toggle-new-record-drawing');
+  const newRecordDrawingContainer = document.getElementById('new-record-drawing-container');
+  if (btnToggleNewRecordDrawing && newRecordDrawingContainer) {
+    btnToggleNewRecordDrawing.addEventListener('click', () => {
+      newRecordDrawingContainer.classList.toggle('hidden');
+      if (newRecordDrawingContainer.classList.contains('hidden')) {
+        newRecordDrawingContainer.style.display = 'none';
+      } else {
+        newRecordDrawingContainer.style.display = 'block';
+      }
+    });
+  }
+
+  // Toggle Todo Edit Modal Drawing Board
+  const btnToggleTodoDrawing = document.getElementById('btn-toggle-todo-modal-drawing');
+  const todoDrawingContainer = document.getElementById('todo-edit-modal-drawing-container');
+  if (btnToggleTodoDrawing && todoDrawingContainer) {
+    btnToggleTodoDrawing.addEventListener('click', () => {
+      todoDrawingContainer.classList.toggle('hidden');
+      if (todoDrawingContainer.classList.contains('hidden')) {
+        todoDrawingContainer.style.display = 'none';
+      } else {
+        todoDrawingContainer.style.display = 'block';
+      }
+    });
+  }
 });

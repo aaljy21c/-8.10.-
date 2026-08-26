@@ -23,6 +23,7 @@ class NeonDrawingBoard {
     this.points = [];
     this.holdTimer = null;
     this.isSnapped = false;
+    this.penOnlyMode = false; // Pen Only mode (Palm rejection)
 
     // Lasso state
     this.lassoPoints = [];
@@ -89,16 +90,18 @@ class NeonDrawingBoard {
       <div class="drawing-tools">
         <button class="tool-btn active" data-tool="pen" title="펜">🖊️</button>
         <button class="tool-btn" data-tool="highlighter" title="형광펜">🖍️</button>
-        <button class="tool-btn" data-tool="eraser" title="지우개">🧹</button>
-        <button class="tool-btn" data-tool="lasso" title="올가미(이동)">✂️</button>
+        <button class="tool-btn" data-tool="eraser" title="지우개">🧽</button>
+        <button class="tool-btn" data-tool="lasso" title="올가미 선택">✂️</button>
       </div>
       <div class="drawing-settings">
-        <!-- Dynamic settings based on tool -->
+        <!-- Settings dynamically change based on tool -->
       </div>
       <div class="drawing-actions">
-        <button class="action-btn" data-action="undo" title="실행 취소">↩️</button>
-        <button class="action-btn" data-action="redo" title="다시 실행">↪️</button>
-        <button class="action-btn" data-action="clear" title="모두 지우기">🗑️</button>
+        <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
+        <button class="action-btn" id="btn-pen-mode" title="손가락 그리기 허용됨 (클릭하여 펜 전용 모드로 전환)">👆</button>
+        <button class="action-btn" id="btn-undo" title="실행 취소">↩️</button>
+        <button class="action-btn" id="btn-redo" title="다시 실행">↪️</button>
+        <button class="action-btn" id="btn-clear" title="전체 지우기">🗑️</button>
       </div>
     `;
 
@@ -116,9 +119,60 @@ class NeonDrawingBoard {
     });
 
     // Action buttons
-    this.toolbar.querySelector('[data-action="undo"]').addEventListener('click', (e) => { e.preventDefault(); this.undo(); });
-    this.toolbar.querySelector('[data-action="redo"]').addEventListener('click', (e) => { e.preventDefault(); this.redo(); });
-    this.toolbar.querySelector('[data-action="clear"]').addEventListener('click', (e) => { e.preventDefault(); this.clearAll(); });
+    this.toolbar.querySelector('#btn-undo').addEventListener('click', (e) => { e.preventDefault(); this.undo(); });
+    this.toolbar.querySelector('#btn-redo').addEventListener('click', (e) => { e.preventDefault(); this.redo(); });
+    this.toolbar.querySelector('#btn-clear').addEventListener('click', () => {
+      if (confirm('그림을 모두 지우시겠습니까?')) this.clearAll();
+    });
+
+    const btnPenMode = this.toolbar.querySelector('#btn-pen-mode');
+    if (btnPenMode) {
+      btnPenMode.addEventListener('click', () => {
+        this.penOnlyMode = !this.penOnlyMode;
+        if (this.penOnlyMode) {
+          btnPenMode.innerHTML = '🖊️';
+          btnPenMode.title = '펜 전용 모드 켜짐 (클릭하여 손가락 그리기 허용)';
+          btnPenMode.classList.add('active');
+        } else {
+          btnPenMode.innerHTML = '👆';
+          btnPenMode.title = '손가락 그리기 허용됨 (클릭하여 펜 전용 모드로 전환)';
+          btnPenMode.classList.remove('active');
+        }
+      });
+    }
+
+    const btnSaveImage = this.toolbar.querySelector('#btn-save-image');
+    if (btnSaveImage) {
+      btnSaveImage.addEventListener('click', (e) => {
+        e.preventDefault();
+        // Create a temporary canvas to fill background
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = this.canvas.width;
+        tempCanvas.height = this.canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Fill background with card-bg color
+        tempCtx.fillStyle = '#1e1e1e';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Draw the drawing canvas over it
+        tempCtx.drawImage(this.canvas, 0, 0);
+        
+        // Export and download
+        const dataUrl = tempCanvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        
+        // Format YYYYMMDD_HHMM
+        const now = new Date();
+        const dateStr = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+        
+        a.download = `planeer_drawing_${dateStr}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      });
+    }
 
     this.settingsContainer = this.toolbar.querySelector('.drawing-settings');
     this.updateSettingsUI();
@@ -166,6 +220,8 @@ class NeonDrawingBoard {
 
   onPointerDown(e) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (this.penOnlyMode && e.pointerType === 'touch') return; // Palm rejection
+    
     this.canvas.setPointerCapture(e.pointerId);
     
     const pos = this.getPointerPos(e);

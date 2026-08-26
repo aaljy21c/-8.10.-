@@ -731,6 +731,16 @@
       <div class="todo-modal-field">
         <label for="todo-edit-modal-memo" class="todo-modal-label">메모 (수행 기록/특이사항)</label>
         <textarea id="todo-edit-modal-memo" class="todo-modal-input" placeholder="수행하면서 있었던 일이나 특이사항을 적어보세요..." rows="2" style="resize: vertical; min-height: 60px; padding: 10px; line-height: 1.4; font-family: inherit; box-sizing: border-box;"></textarea>
+        
+        <!-- Photo Upload for Todo Memo -->
+        <div class="diary-media-row" style="margin-top: 8px;">
+          <label class="diary-photo-upload-label" for="todo-edit-modal-photo-input" style="font-size: 0.8rem; padding: 6px 10px;">
+            <input type="file" id="todo-edit-modal-photo-input" accept="image/*" class="diary-file-input" multiple>
+            <span class="upload-icon">📷</span> 사진 첨부 (여러장 가능)
+          </label>
+          <span id="todo-edit-modal-photo-status" class="diary-save-status"></span>
+        </div>
+        <div id="todo-edit-modal-previews" class="record-draft-previews" style="margin-top: 8px;"></div>
       </div>
       
       <div class="todo-modal-field">

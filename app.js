@@ -78,6 +78,7 @@ let lightboxIsDraft = false;
 // Todo Editing Modal State
 let editingTodoId = null;
 let modalSelectedCategory = 'none';
+let todoEditDraftImages = [];
 
 // Search Navigation state tracker
 let searchAutoOpenedSections = [];
@@ -3339,16 +3340,18 @@ function setupEventListeners() {
 
       const importantInput = document.getElementById('todo-edit-modal-important');
       const isImportantVal = importantInput ? importantInput.checked : Boolean(todo.isImportant);
+      const newImages = [...todoEditDraftImages];
 
       const todo = state.todos[dateKey].find(t => t.id === editingTodoId);
       if (todo) {
-        // Save if anything changed (text, category, time, date, memo, or importance)
-        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey || (todo.memo || '') !== memoValue || Boolean(todo.isImportant) !== isImportantVal) {
+        // Save if anything changed (text, category, time, date, memo, importance, or memo images)
+        if (todo.text !== text || todo.category !== modalSelectedCategory || todo.time !== timeValue || targetDateKey !== dateKey || (todo.memo || '') !== memoValue || Boolean(todo.isImportant) !== isImportantVal || JSON.stringify(todo.memoImages || []) !== JSON.stringify(newImages)) {
           pushToHistory();
           todo.text = text;
           todo.category = modalSelectedCategory;
           todo.time = timeValue;
           todo.memo = memoValue;
+          todo.memoImages = newImages;
           todo.isImportant = isImportantVal;
 
           // If date has changed, move the todo item
@@ -3404,6 +3407,40 @@ function setupEventListeners() {
       } else if (e.key === 'Escape') {
         closeTodoEditModal();
       }
+    });
+  }
+
+  const todoEditModalPhotoInput = document.getElementById('todo-edit-modal-photo-input');
+  if (todoEditModalPhotoInput) {
+    todoEditModalPhotoInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+      
+      const statusSpan = document.getElementById('todo-edit-modal-photo-status');
+      if (statusSpan) {
+        statusSpan.textContent = '사진 압축 중...';
+        statusSpan.style.opacity = '1';
+      }
+      
+      let processed = 0;
+      files.forEach(file => {
+        compressAndSaveImage(file, (dataUrl) => {
+          todoEditDraftImages.push({
+            src: dataUrl,
+            rotate: 0,
+            mode: 'cover',
+            filter: 'normal'
+          });
+          processed++;
+          if (processed === files.length) {
+            renderTodoEditPreviews();
+            if (statusSpan) {
+              statusSpan.textContent = '';
+            }
+          }
+        });
+      });
+      todoEditModalPhotoInput.value = '';
     });
   }
 
@@ -4060,6 +4097,7 @@ function openTodoEditModal(todoId) {
 
   editingTodoId = todoId;
   modalSelectedCategory = todo.category || 'none';
+  todoEditDraftImages = todo.memoImages ? JSON.parse(JSON.stringify(todo.memoImages)) : [];
 
   // Fill text input
   const textInput = document.getElementById('todo-edit-modal-text');
@@ -4149,6 +4187,44 @@ function openTodoEditModal(todoId) {
       textInput.select();
     }, 100);
   }
+  
+  renderTodoEditPreviews();
+}
+
+function renderTodoEditPreviews() {
+  const previewsContainer = document.getElementById('todo-edit-modal-previews');
+  if (!previewsContainer) return;
+  previewsContainer.innerHTML = '';
+  
+  todoEditDraftImages.forEach((imgSrc, idx) => {
+    if (typeof imgSrc === 'string') {
+      todoEditDraftImages[idx] = { src: imgSrc, rotate: 0, mode: 'cover', filter: 'normal' };
+      imgSrc = todoEditDraftImages[idx];
+    }
+    const thumb = document.createElement('div');
+    thumb.className = 'record-draft-thumb';
+    const imgWrapper = document.createElement('div');
+    imgWrapper.className = 'thumb-img-wrapper';
+    const img = document.createElement('img');
+    img.src = imgSrc.src;
+    img.style = getImageStyle(imgSrc);
+    img.style.cursor = 'pointer';
+    img.addEventListener('click', () => {
+      openLightbox(todoEditDraftImages, idx, true);
+    });
+    imgWrapper.appendChild(img);
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'delete-thumb-btn';
+    delBtn.innerHTML = '&times;';
+    delBtn.addEventListener('click', () => {
+      todoEditDraftImages.splice(idx, 1);
+      renderTodoEditPreviews();
+    });
+    imgWrapper.appendChild(delBtn);
+    thumb.appendChild(imgWrapper);
+    previewsContainer.appendChild(thumb);
+  });
 }
 
 // Close Todo Edit Modal
@@ -7139,6 +7215,40 @@ function renderTodos() {
       memoDiv.className = 'todo-memo-text';
       memoDiv.innerHTML = linkify(todo.memo).replace(/\n/g, '<br>');
       itemLeft.appendChild(memoDiv);
+    }
+    
+    // Memo Photos rendering
+    if (todo.memoImages && todo.memoImages.length > 0) {
+      const memoPhotosDiv = document.createElement('div');
+      memoPhotosDiv.style.display = 'flex';
+      memoPhotosDiv.style.flexWrap = 'wrap';
+      memoPhotosDiv.style.gap = '8px';
+      memoPhotosDiv.style.marginTop = '6px';
+      
+      todo.memoImages.forEach((imgObj, idx) => {
+        const thumb = document.createElement('div');
+        thumb.style.width = '60px';
+        thumb.style.height = '60px';
+        thumb.style.borderRadius = '8px';
+        thumb.style.overflow = 'hidden';
+        thumb.style.border = '1px solid var(--panel-border)';
+        thumb.style.cursor = 'pointer';
+        
+        const img = document.createElement('img');
+        img.src = imgObj.src || imgObj;
+        img.style = getImageStyle(typeof imgObj === 'string' ? {src: imgObj, mode: 'cover'} : imgObj);
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = (imgObj.mode || 'cover') === 'contain' ? 'contain' : 'cover';
+        
+        thumb.appendChild(img);
+        thumb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openLightbox(todo.memoImages, idx, false);
+        });
+        memoPhotosDiv.appendChild(thumb);
+      });
+      itemLeft.appendChild(memoPhotosDiv);
     }
 
     // Action buttons container

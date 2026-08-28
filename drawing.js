@@ -402,7 +402,7 @@ class NeonDrawingBoard {
     if (this.readOnly) return;
     this.clearHoldTimer();
     
-    const isEraserButton = e.button === 2 || e.button === 5 || (e.buttons & 2) || (e.buttons & 32);
+    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4);
     if (e.pointerType === 'mouse' && e.button !== 0 && !isEraserButton) return;
     
     this.isTempEraser = isEraserButton;
@@ -514,7 +514,7 @@ class NeonDrawingBoard {
     }
 
     // Dynamically check if eraser button is pressed during move
-    const isEraserButton = e.button === 2 || e.button === 5 || (e.buttons & 2) || (e.buttons & 32);
+    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4);
     if (isEraserButton) {
       this.isTempEraser = true;
     } else if (e.pointerType === 'mouse') { 

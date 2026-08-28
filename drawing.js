@@ -20,8 +20,8 @@ class NeonDrawingBoard {
     this.highlighterSize = 15;
     this.highlighterOpacity = 0.4;
     
-    this.penPresets = JSON.parse(localStorage.getItem('planeer_pen_presets')) || ['#ffffff', '#ff4d4d', '#4da6ff'];
-    this.hlPresets = JSON.parse(localStorage.getItem('planeer_hl_presets')) || ['#facc15', '#ff7b72', '#79c0ff'];
+    this.penPresets = JSON.parse(localStorage.getItem('planeer_pen_presets')) || ['#ffffff', '#ff4d4d', '#4da6ff', '#54ff4d', '#ffed4d'];
+    this.hlPresets = JSON.parse(localStorage.getItem('planeer_hl_presets')) || ['#facc15', '#ff7b72', '#79c0ff', '#85e89d', '#ffed4d'];
 
     // Interaction state
     this.isDrawing = false;
@@ -124,6 +124,7 @@ class NeonDrawingBoard {
       <div class="drawing-actions">
         <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
         <button class="action-btn" id="btn-reset-view" title="1:1 화면 초기화">🔍</button>
+        <span id="zoom-text" style="font-size:0.85rem; font-weight:bold; color:#818cf8; margin-left: 4px; margin-right: 8px; min-width: 40px; text-align: center;">100%</span>
         <button class="action-btn" id="btn-pen-mode" title="손가락 그리기 허용됨 (클릭하여 펜 전용 모드로 전환)">👆</button>
         <button class="action-btn" id="btn-undo" title="실행 취소">↩️</button>
         <button class="action-btn" id="btn-redo" title="다시 실행">↪️</button>
@@ -733,6 +734,11 @@ class NeonDrawingBoard {
   }
 
   render() {
+    if (this.toolbar) {
+      const zoomText = this.toolbar.querySelector('#zoom-text');
+      if (zoomText) zoomText.innerText = Math.round(this.viewScale * 100) + '%';
+    }
+
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.ctx.save();

@@ -4313,16 +4313,10 @@ function openTodoEditModal(todoId) {
   
   renderTodoEditPreviews();
 
-  // Initialize drawing board
+  // Initialize drawing board (now handled by global modal)
   const drawingContainer = document.getElementById('todo-edit-modal-drawing-container');
   if (drawingContainer) {
     drawingContainer.innerHTML = '';
-    new NeonDrawingBoard(drawingContainer, {
-      initialData: todoEditDraftDrawing,
-      onChange: (data) => {
-        todoEditDraftDrawing = data;
-      }
-    });
   }
 
   // Setup Todo audio dictate button
@@ -5226,25 +5220,12 @@ function renderDiary() {
         drawingLabel.innerHTML = '<span class="upload-icon">🎨</span> 손그림 그리기 (열기/닫기)';
         card.appendChild(drawingLabel);
 
-        const drawingContainer = document.createElement('div');
-        drawingContainer.className = 'diary-drawing-container hidden';
-        drawingContainer.style.display = 'none';
-        card.appendChild(drawingContainer);
-
         drawingLabel.addEventListener('click', () => {
-          drawingContainer.classList.toggle('hidden');
-          if (drawingContainer.classList.contains('hidden')) {
-            drawingContainer.style.display = 'none';
-          } else {
-            drawingContainer.style.display = 'block';
-          }
-        });
-
-        new NeonDrawingBoard(drawingContainer, {
-          initialData: state.diaryDraftDrawing || [],
-          onChange: (data) => {
+          openGlobalDrawingModal(state.diaryDraftDrawing, (data) => {
             state.diaryDraftDrawing = data;
-          }
+            // Re-render to show updated thumbnail if needed, or just keep state
+            renderDiary();
+          });
         });
 
         // Actions row
@@ -5502,13 +5483,7 @@ function renderDiary() {
 
     const drawingContainer = document.getElementById('new-record-drawing-container');
     if (drawingContainer) {
-      drawingContainer.innerHTML = ''; // Reset container
-      new NeonDrawingBoard(drawingContainer, {
-        initialData: state.diaryDraftDrawing || [],
-        onChange: (data) => {
-          state.diaryDraftDrawing = data;
-        }
-      });
+      drawingContainer.innerHTML = ''; // Reset container (now handled by global modal)
     }
   } else {
     newRecordCreator.classList.add('hidden');
@@ -8314,29 +8289,70 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Toggle New Record Drawing Board
   const btnToggleNewRecordDrawing = document.getElementById('btn-toggle-new-record-drawing');
-  const newRecordDrawingContainer = document.getElementById('new-record-drawing-container');
-  if (btnToggleNewRecordDrawing && newRecordDrawingContainer) {
+  if (btnToggleNewRecordDrawing) {
     btnToggleNewRecordDrawing.addEventListener('click', () => {
-      newRecordDrawingContainer.classList.toggle('hidden');
-      if (newRecordDrawingContainer.classList.contains('hidden')) {
-        newRecordDrawingContainer.style.display = 'none';
-      } else {
-        newRecordDrawingContainer.style.display = 'block';
-      }
+      openGlobalDrawingModal(state.diaryDraftDrawing, (data) => {
+        state.diaryDraftDrawing = data;
+        // Optionally re-render the view container if we had one inline, but now it's only in modal.
+        // But we might still want to show a small thumbnail or just let them edit.
+        renderDiary(); 
+      });
     });
   }
 
   // Toggle Todo Edit Modal Drawing Board
   const btnToggleTodoDrawing = document.getElementById('btn-toggle-todo-modal-drawing');
-  const todoDrawingContainer = document.getElementById('todo-edit-modal-drawing-container');
-  if (btnToggleTodoDrawing && todoDrawingContainer) {
+  if (btnToggleTodoDrawing) {
     btnToggleTodoDrawing.addEventListener('click', () => {
-      todoDrawingContainer.classList.toggle('hidden');
-      if (todoDrawingContainer.classList.contains('hidden')) {
-        todoDrawingContainer.style.display = 'none';
-      } else {
-        todoDrawingContainer.style.display = 'block';
-      }
+      openGlobalDrawingModal(todoEditDraftDrawing, (data) => {
+        todoEditDraftDrawing = data;
+      });
     });
+  }
+
+  // Global Drawing Modal Logic
+  let globalDrawingBoardInstance = null;
+  let globalDrawingSaveCallback = null;
+
+  window.openGlobalDrawingModal = function(initialData, onSave) {
+    const modal = document.getElementById('global-drawing-modal');
+    const container = document.getElementById('global-drawing-container');
+    if (!modal || !container) return;
+
+    modal.classList.remove('hidden');
+    container.innerHTML = '';
+    
+    modal.style.display = 'block';
+    
+    globalDrawingSaveCallback = onSave;
+    
+    setTimeout(() => {
+      globalDrawingBoardInstance = new NeonDrawingBoard(container, {
+        initialData: initialData || [],
+        onChange: (data) => {} // Do not auto-save on change
+      });
+    }, 50);
+  };
+
+  document.getElementById('btn-save-global-drawing')?.addEventListener('click', () => {
+    if (globalDrawingBoardInstance && globalDrawingSaveCallback) {
+      const data = globalDrawingBoardInstance.getData();
+      globalDrawingSaveCallback(data);
+    }
+    closeGlobalDrawingModal();
+  });
+
+  document.getElementById('btn-close-global-drawing')?.addEventListener('click', () => {
+    closeGlobalDrawingModal();
+  });
+
+  function closeGlobalDrawingModal() {
+    const modal = document.getElementById('global-drawing-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = '';
+    }
+    globalDrawingBoardInstance = null;
+    globalDrawingSaveCallback = null;
   }
 });

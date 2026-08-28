@@ -117,3 +117,13 @@
   height: 100%;
   touch-action: none; /* Crucial for mobile drawing */
 }
+
+@media (max-width: 600px) {
+  .neon-drawing-toolbar { gap: 12px; }
+  .drawing-settings { flex-basis: 100%; min-width: 100%; margin-top: 4px; }
+  .global-settings { flex-basis: 100%; min-width: 100%; margin-top: 4px; }
+  #global-drawing-modal .lightbox-content > div:first-child {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+}

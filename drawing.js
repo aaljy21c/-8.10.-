@@ -517,9 +517,8 @@ class NeonDrawingBoard {
     const isEraserButton = e.button === 2 || e.button === 5 || (e.buttons & 2) || (e.buttons & 32);
     if (isEraserButton) {
       this.isTempEraser = true;
-    } else if (e.pointerType !== 'mouse') { // If they release the button while drawing with pen
-      // Actually, releasing the button might change e.buttons, but on Android it's tricky.
-      // Let's just update it based on e.buttons.
+    } else if (e.pointerType === 'mouse') { 
+      // Only reset for mouse, since S-Pen often drops the button state during move
       this.isTempEraser = false;
     }
     

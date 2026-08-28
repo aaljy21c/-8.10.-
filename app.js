@@ -8208,35 +8208,130 @@ function renderAudioPreviews(containerId, draftArray, onChangeCallback) {
   draftArray.forEach((audioData, idx) => {
     const wrapper = document.createElement('div');
     wrapper.style.display = 'flex';
-    wrapper.style.alignItems = 'center';
-    wrapper.style.gap = '8px';
+    wrapper.style.flexDirection = 'column';
+    wrapper.style.gap = '4px';
     wrapper.style.background = 'rgba(255,255,255,0.05)';
     wrapper.style.padding = '8px';
     wrapper.style.borderRadius = '6px';
+    wrapper.style.marginBottom = '8px';
 
-    const audioEl = document.createElement('audio');
-    audioEl.controls = true;
-    audioEl.src = audioData.src || audioData;
-    audioEl.style.height = '36px';
-    audioEl.style.flex = '1';
-    
-    wrapper.appendChild(audioEl);
+    const hasAudio = audioData.src ? true : false;
+    const hasText = audioData.transcription ? true : false;
 
-    if (onChangeCallback) {
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.innerHTML = '❌';
-      delBtn.style.background = 'none';
-      delBtn.style.border = 'none';
-      delBtn.style.cursor = 'pointer';
-      delBtn.style.fontSize = '1.2rem';
-      delBtn.addEventListener('click', () => {
-        draftArray.splice(idx, 1);
-        onChangeCallback();
+    if (hasAudio) {
+      const audioRow = document.createElement('div');
+      audioRow.style.display = 'flex';
+      audioRow.style.alignItems = 'center';
+      audioRow.style.gap = '8px';
+
+      const audioEl = document.createElement('audio');
+      audioEl.controls = true;
+      audioEl.src = audioData.src;
+      audioEl.style.height = '36px';
+      audioEl.style.flex = '1';
+      audioRow.appendChild(audioEl);
+
+      const dlAudioBtn = document.createElement('button');
+      dlAudioBtn.type = 'button';
+      dlAudioBtn.innerHTML = '💾';
+      dlAudioBtn.title = '오디오 저장';
+      dlAudioBtn.style.background = 'none';
+      dlAudioBtn.style.border = 'none';
+      dlAudioBtn.style.cursor = 'pointer';
+      dlAudioBtn.style.fontSize = '1.2rem';
+      dlAudioBtn.addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = audioData.src;
+        a.download = `녹음_${new Date().getTime()}.webm`;
+        a.click();
       });
-      wrapper.appendChild(delBtn);
+      audioRow.appendChild(dlAudioBtn);
+
+      if (onChangeCallback) {
+        const delAudioBtn = document.createElement('button');
+        delAudioBtn.type = 'button';
+        delAudioBtn.innerHTML = '🗑️';
+        delAudioBtn.title = '오디오 삭제';
+        delAudioBtn.style.background = 'none';
+        delAudioBtn.style.border = 'none';
+        delAudioBtn.style.cursor = 'pointer';
+        delAudioBtn.style.fontSize = '1.2rem';
+        delAudioBtn.addEventListener('click', () => {
+          audioData.src = null;
+          if (!audioData.transcription) draftArray.splice(idx, 1);
+          onChangeCallback();
+        });
+        audioRow.appendChild(delAudioBtn);
+      }
+      wrapper.appendChild(audioRow);
     }
-    container.appendChild(wrapper);
+
+    if (hasText) {
+      const textRow = document.createElement('div');
+      textRow.style.display = 'flex';
+      textRow.style.alignItems = 'flex-start';
+      textRow.style.gap = '8px';
+      textRow.style.marginTop = '4px';
+
+      const textArea = document.createElement('textarea');
+      textArea.value = audioData.transcription;
+      textArea.className = 'diary-textarea';
+      textArea.style.flex = '1';
+      textArea.style.minHeight = '60px';
+      textArea.style.padding = '8px';
+      textArea.style.fontSize = '0.9rem';
+      textArea.placeholder = '변환된 텍스트가 없습니다.';
+      textArea.addEventListener('input', (e) => {
+        audioData.transcription = e.target.value;
+      });
+      textRow.appendChild(textArea);
+
+      const textBtnCol = document.createElement('div');
+      textBtnCol.style.display = 'flex';
+      textBtnCol.style.flexDirection = 'column';
+      textBtnCol.style.gap = '4px';
+
+      const dlTextBtn = document.createElement('button');
+      dlTextBtn.type = 'button';
+      dlTextBtn.innerHTML = '💾';
+      dlTextBtn.title = '텍스트 저장';
+      dlTextBtn.style.background = 'none';
+      dlTextBtn.style.border = 'none';
+      dlTextBtn.style.cursor = 'pointer';
+      dlTextBtn.style.fontSize = '1.2rem';
+      dlTextBtn.addEventListener('click', () => {
+        const blob = new Blob([audioData.transcription], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `녹음텍스트_${new Date().getTime()}.txt`;
+        a.click();
+      });
+      textBtnCol.appendChild(dlTextBtn);
+
+      if (onChangeCallback) {
+        const delTextBtn = document.createElement('button');
+        delTextBtn.type = 'button';
+        delTextBtn.innerHTML = '🗑️';
+        delTextBtn.title = '텍스트 삭제';
+        delTextBtn.style.background = 'none';
+        delTextBtn.style.border = 'none';
+        delTextBtn.style.cursor = 'pointer';
+        delTextBtn.style.fontSize = '1.2rem';
+        delTextBtn.addEventListener('click', () => {
+          audioData.transcription = null;
+          if (!audioData.src) draftArray.splice(idx, 1);
+          onChangeCallback();
+        });
+        textBtnCol.appendChild(delTextBtn);
+      }
+      
+      textRow.appendChild(textBtnCol);
+      wrapper.appendChild(textRow);
+    }
+
+    if (hasAudio || hasText) {
+      container.appendChild(wrapper);
+    }
   });
 }
 

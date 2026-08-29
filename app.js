@@ -3543,21 +3543,38 @@ function setupEventListeners() {
       
       let processed = 0;
       files.forEach(file => {
-        compressAndSaveImage(file, (dataUrl) => {
-          todoEditDraftImages.push({
-            src: dataUrl,
-            rotate: 0,
-            mode: 'cover',
-            filter: 'normal'
-          });
-          processed++;
-          if (processed === files.length) {
-            renderTodoEditPreviews();
-            if (statusSpan) {
-              statusSpan.textContent = '';
+        if (file.type.startsWith('video/') || file.type === 'application/pdf') {
+          FileDB.saveFile(file, file.type, file.name).then(id => {
+            todoEditDraftImages.push({
+              fileId: id,
+              type: file.type.startsWith('video/') ? 'video' : 'pdf',
+              name: file.name
+            });
+            processed++;
+            if (processed === files.length) {
+              renderTodoEditPreviews();
+              if (statusSpan) {
+                statusSpan.textContent = '';
+              }
             }
-          }
-        });
+          }).catch(err => console.error(err));
+        } else {
+          compressAndSaveImage(file, (dataUrl) => {
+            todoEditDraftImages.push({
+              src: dataUrl,
+              rotate: 0,
+              mode: 'cover',
+              filter: 'normal'
+            });
+            processed++;
+            if (processed === files.length) {
+              renderTodoEditPreviews();
+              if (statusSpan) {
+                statusSpan.textContent = '';
+              }
+            }
+          });
+        }
       });
       todoEditModalPhotoInput.value = '';
     });
@@ -4313,18 +4330,34 @@ function openTodoEditModal(todoId) {
   
   renderTodoEditPreviews();
 
-  // Initialize drawing board
-  const drawingContainer = document.getElementById('todo-edit-modal-drawing-container');
-  if (drawingContainer) {
-    drawingContainer.innerHTML = '';
-    new NeonDrawingBoard(drawingContainer, {
-      initialData: todoEditDraftDrawing,
-      onChange: (data) => {
-        todoEditDraftDrawing = data;
+  // Setup Drawing Button
+  const btnToggleTodoDrawing = document.getElementById('btn-toggle-todo-modal-drawing');
+  if (btnToggleTodoDrawing) {
+    const newBtn = btnToggleTodoDrawing.cloneNode(true);
+    btnToggleTodoDrawing.parentNode.replaceChild(newBtn, btnToggleTodoDrawing);
+    
+    // Update thumbnail
+    const updateThumb = () => {
+      const container = document.getElementById('todo-edit-modal-drawing-container');
+      if (!container) return;
+      container.innerHTML = '';
+      if (hasDrawingData(todoEditDraftDrawing)) {
+        container.style.display = 'block';
+        container.classList.remove('hidden');
+        new NeonDrawingBoard(container, { initialData: todoEditDraftDrawing, readOnly: true });
+      } else {
+        container.style.display = 'none';
       }
+    };
+    updateThumb();
+
+    newBtn.addEventListener('click', () => {
+      openFullscreenDrawing(todoEditDraftDrawing, (data) => {
+        todoEditDraftDrawing = data;
+        updateThumb();
+      });
     });
   }
-
   // Setup Todo audio dictate button
   const todoDictateBtn = document.getElementById('btn-dictate-todo-modal');
   if (todoDictateBtn) {
@@ -5232,20 +5265,26 @@ function renderDiary() {
         card.appendChild(drawingContainer);
 
         drawingLabel.addEventListener('click', () => {
-          drawingContainer.classList.toggle('hidden');
-          if (drawingContainer.classList.contains('hidden')) {
-            drawingContainer.style.display = 'none';
-          } else {
-            drawingContainer.style.display = 'block';
-          }
-        });
-
-        new NeonDrawingBoard(drawingContainer, {
-          initialData: state.diaryDraftDrawing || [],
-          onChange: (data) => {
+          openFullscreenDrawing(state.diaryDraftDrawing || [], (data) => {
             state.diaryDraftDrawing = data;
-          }
+            // Update thumbnail
+            drawingContainer.innerHTML = '';
+            if (data && data.length > 0) {
+              drawingContainer.style.display = 'block';
+              drawingContainer.classList.remove('hidden');
+              new NeonDrawingBoard(drawingContainer, { initialData: data, readOnly: true });
+            } else {
+              drawingContainer.style.display = 'none';
+            }
+          });
         });
+        
+        // Initial thumbnail render
+        if (hasDrawingData(state.diaryDraftDrawing)) {
+          drawingContainer.style.display = 'block';
+          drawingContainer.classList.remove('hidden');
+          new NeonDrawingBoard(drawingContainer, { initialData: state.diaryDraftDrawing, readOnly: true });
+        }
 
         // Actions row
         const actionsRow = document.createElement('div');
@@ -5297,19 +5336,17 @@ function renderDiary() {
             grid.classList.add('hidden');
           }
           record.images.forEach((imgSrc, idx) => {
-            const img = document.createElement('img');
-            img.src = typeof imgSrc === 'string' ? imgSrc : imgSrc.src;
-            img.style = getImageStyle(imgSrc);
-            img.alt = '기록 사진';
-            img.addEventListener('click', () => {
-              openLightbox(record.images, idx);
-            });
-            grid.appendChild(img);
+            const mediaEl = createMediaElementAsync(
+              imgSrc,
+              false,
+              () => openLightbox(record.images, idx)
+            );
+            grid.appendChild(mediaEl);
           });
           card.appendChild(grid);
         }
 
-        if (record.drawing && record.drawing.length > 0) {
+        if (hasDrawingData(record.drawing)) {
           const drawingToggleBtn = document.createElement('div');
           drawingToggleBtn.className = 'record-drawing-toggle';
           drawingToggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭하여 펼치기)';
@@ -5332,14 +5369,18 @@ function renderDiary() {
           });
           
           viewDrawingContainer.style.cursor = 'pointer';
-          viewDrawingContainer.title = '클릭하여 일기 수정하기';
-          const openEdit = (e) => {
+          viewDrawingContainer.title = '클릭하여 곧바로 그림 수정하기';
+          const openDirectEdit = (e) => {
             e.stopPropagation();
             e.preventDefault();
-            openRecordEditor(record.id);
+            openFullscreenDrawing(record.drawing, (data) => {
+              record.drawing = data;
+              saveDiaries();
+              renderDiary();
+            });
           };
-          viewDrawingContainer.addEventListener('click', openEdit);
-          viewDrawingContainer.addEventListener('contextmenu', openEdit);
+          viewDrawingContainer.addEventListener('click', openDirectEdit);
+          viewDrawingContainer.addEventListener('contextmenu', openDirectEdit);
         }
 
         if (record.audio && record.audio.length > 0) {
@@ -5406,7 +5447,7 @@ function renderDiary() {
                 htmlContent += `<audio controls src="${a.src || a}"></audio>`;
              });
           }
-          if (record.drawing && record.drawing.length > 0) {
+          if (hasDrawingData(record.drawing)) {
              const canvas = card.querySelector('.diary-drawing-container canvas');
              if (canvas) {
                 const tempCanvas = document.createElement('canvas');
@@ -5501,13 +5542,29 @@ function renderDiary() {
     }
 
     const drawingContainer = document.getElementById('new-record-drawing-container');
-    if (drawingContainer) {
-      drawingContainer.innerHTML = ''; // Reset container
-      new NeonDrawingBoard(drawingContainer, {
-        initialData: state.diaryDraftDrawing || [],
-        onChange: (data) => {
-          state.diaryDraftDrawing = data;
+    const updateNewRecordThumb = () => {
+      if (drawingContainer) {
+        drawingContainer.innerHTML = '';
+        if (hasDrawingData(state.diaryDraftDrawing)) {
+          drawingContainer.style.display = 'block';
+          drawingContainer.classList.remove('hidden');
+          new NeonDrawingBoard(drawingContainer, { initialData: state.diaryDraftDrawing, readOnly: true });
+        } else {
+          drawingContainer.style.display = 'none';
         }
+      }
+    };
+    updateNewRecordThumb();
+    
+    const btnToggleNewRecordDrawing = document.getElementById('btn-toggle-new-record-drawing');
+    if (btnToggleNewRecordDrawing) {
+      const newBtn = btnToggleNewRecordDrawing.cloneNode(true);
+      btnToggleNewRecordDrawing.parentNode.replaceChild(newBtn, btnToggleNewRecordDrawing);
+      newBtn.addEventListener('click', () => {
+        openFullscreenDrawing(state.diaryDraftDrawing || [], (data) => {
+          state.diaryDraftDrawing = data;
+          updateNewRecordThumb();
+        });
       });
     }
   } else {
@@ -7550,7 +7607,7 @@ function renderTodos() {
 
     // Memo Drawing rendering
     // Memo Drawing rendering
-    if (todo.memoDrawing && todo.memoDrawing.length > 0) {
+    if (hasDrawingData(todo.memoDrawing)) {
       const drawingToggleBtn = document.createElement('div');
       drawingToggleBtn.className = 'record-drawing-toggle';
       drawingToggleBtn.innerHTML = '🖼️ 첨부된 그림 보기 (클릭)';
@@ -7575,14 +7632,18 @@ function renderTodos() {
       });
       
       viewDrawingContainer.style.cursor = 'pointer';
-      viewDrawingContainer.title = '클릭하여 할 일 수정하기';
-      const openEdit = (e) => {
+      viewDrawingContainer.title = '클릭하여 곧바로 그림 수정하기';
+      const openDirectEdit = (e) => {
         e.stopPropagation();
         e.preventDefault();
-        openTodoEditModal(todo.id);
+        openFullscreenDrawing(todo.memoDrawing, (data) => {
+          todo.memoDrawing = data;
+          saveTodos();
+          renderTodos();
+        });
       };
-      viewDrawingContainer.addEventListener('click', openEdit);
-      viewDrawingContainer.addEventListener('contextmenu', openEdit);
+      viewDrawingContainer.addEventListener('click', openDirectEdit);
+      viewDrawingContainer.addEventListener('contextmenu', openDirectEdit);
     }
 
     // Memo Audio rendering
@@ -8136,6 +8197,163 @@ function handleVoiceCommand(transcript, recognition, stopListeningUI) {
 
 document.addEventListener('DOMContentLoaded', initVoiceAssistant);
 
+
+
+// Helper to render media async (Image, Video, PDF)
+function createMediaElementAsync(mediaObj, isEditMode, onClick, onRemove) {
+  const container = document.createElement('div');
+  container.className = isEditMode ? 'thumb-img-wrapper' : 'media-view-wrapper';
+  container.style.position = 'relative';
+  container.style.display = 'flex';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+  container.style.overflow = 'hidden';
+  if (!isEditMode) container.style.height = '100%';
+
+  if (isEditMode && onRemove) {
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'delete-thumb-btn';
+    delBtn.innerHTML = '&times;';
+    delBtn.style.position = 'absolute';
+    delBtn.style.top = '4px';
+    delBtn.style.right = '4px';
+    delBtn.style.zIndex = '10';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onRemove();
+    });
+    container.appendChild(delBtn);
+  }
+
+  if (typeof mediaObj === 'string') {
+    mediaObj = { src: mediaObj, type: 'image' };
+  }
+
+  if (!mediaObj.type || mediaObj.type === 'image' || mediaObj.src) {
+    const img = document.createElement('img');
+    img.src = mediaObj.src;
+    if (mediaObj.rotate !== undefined) img.style = getImageStyle(mediaObj);
+    if (!isEditMode) {
+      img.style.cursor = 'pointer';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+    } else {
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+    }
+    img.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (onClick) onClick();
+    });
+    container.appendChild(img);
+  } else if (mediaObj.type === 'video' || mediaObj.type === 'pdf') {
+    const loading = document.createElement('div');
+    loading.textContent = '...';
+    loading.style.color = '#fff';
+    container.appendChild(loading);
+
+    FileDB.getFile(mediaObj.fileId).then(fileRecord => {
+      container.removeChild(loading);
+      if (!fileRecord || !fileRecord.blob) {
+        const err = document.createElement('div');
+        err.textContent = '❌';
+        container.appendChild(err);
+        return;
+      }
+      
+      const blobUrl = URL.createObjectURL(fileRecord.blob);
+      if (mediaObj.type === 'video') {
+        const vid = document.createElement('video');
+        vid.src = blobUrl;
+        vid.controls = true;
+        vid.style.width = '100%';
+        vid.style.height = '100%';
+        vid.style.objectFit = 'cover';
+        if (isEditMode) {
+           vid.controls = false;
+        }
+        container.appendChild(vid);
+      } else if (mediaObj.type === 'pdf') {
+        const pdfBtn = document.createElement('button');
+        pdfBtn.type = 'button';
+        pdfBtn.innerHTML = '📄 PDF';
+        pdfBtn.style.padding = '8px';
+        pdfBtn.style.background = '#3b82f6';
+        pdfBtn.style.color = '#fff';
+        pdfBtn.style.border = 'none';
+        pdfBtn.style.borderRadius = '4px';
+        pdfBtn.style.cursor = 'pointer';
+        pdfBtn.style.width = '100%';
+        pdfBtn.style.height = '100%';
+        pdfBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.open(blobUrl, '_blank');
+        });
+        container.appendChild(pdfBtn);
+      }
+    }).catch(e => {
+       console.error("Failed to load file:", e);
+    });
+  }
+  return container;
+}
+
+// ====== FILE DB (IndexedDB) ======
+const FileDB = {
+  db: null,
+  init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("PlaneerFileDB", 1);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("files")) {
+          db.createObjectStore("files", { keyPath: "id" });
+        }
+      };
+      request.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve();
+      };
+      request.onerror = (e) => {
+        console.error("FileDB init error:", e);
+        reject(e);
+      };
+    });
+  },
+  async saveFile(blob, type, name) {
+    if (!this.db) await this.init();
+    const id = 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction("files", "readwrite");
+      tx.objectStore("files").put({ id, blob, type, name, timestamp: Date.now() });
+      tx.oncomplete = () => resolve(id);
+      tx.onerror = (e) => reject(e);
+    });
+  },
+  async getFile(id) {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction("files", "readonly");
+      const request = tx.objectStore("files").get(id);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => reject(e);
+    });
+  },
+  async deleteFile(id) {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction("files", "readwrite");
+      tx.objectStore("files").delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e);
+    });
+  }
+};
+FileDB.init();
+
 // ====== AUDIO RECORDING & STT ======
 const AudioRecorder = {
   mediaRecorder: null,
@@ -8175,8 +8393,24 @@ const AudioRecorder = {
   async start(onStopCallback, onProgressCallback) {
     if (this.isRecording) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.mediaRecorder = new MediaRecorder(stream);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 2
+        } 
+      });
+      
+      const options = { audioBitsPerSecond: 128000 };
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options.mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
+        options.mimeType = 'audio/mp4;codecs=mp4a.40.2';
+      }
+      
+      this.mediaRecorder = new MediaRecorder(stream, options);
       this.audioChunks = [];
       this.finalTranscript = '';
       this.onStop = onStopCallback;
@@ -8233,11 +8467,18 @@ function renderAudioPreviews(containerId, draftArray, onChangeCallback) {
   draftArray.forEach((audioData, idx) => {
     const wrapper = document.createElement('div');
     wrapper.style.display = 'flex';
-    wrapper.style.alignItems = 'center';
+    wrapper.style.flexDirection = 'column';
     wrapper.style.gap = '8px';
     wrapper.style.background = 'rgba(255,255,255,0.05)';
-    wrapper.style.padding = '8px';
-    wrapper.style.borderRadius = '6px';
+    wrapper.style.padding = '12px';
+    wrapper.style.borderRadius = '8px';
+    wrapper.style.border = '1px solid rgba(255,255,255,0.1)';
+    wrapper.style.marginBottom = '8px';
+
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.gap = '8px';
 
     const audioEl = document.createElement('audio');
     audioEl.controls = true;
@@ -8245,12 +8486,13 @@ function renderAudioPreviews(containerId, draftArray, onChangeCallback) {
     audioEl.style.height = '36px';
     audioEl.style.flex = '1';
     
-    wrapper.appendChild(audioEl);
+    row.appendChild(audioEl);
 
     if (onChangeCallback) {
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.innerHTML = '❌';
+      delBtn.title = '녹음 파일 삭제';
       delBtn.style.background = 'none';
       delBtn.style.border = 'none';
       delBtn.style.cursor = 'pointer';
@@ -8259,8 +8501,67 @@ function renderAudioPreviews(containerId, draftArray, onChangeCallback) {
         draftArray.splice(idx, 1);
         onChangeCallback();
       });
-      wrapper.appendChild(delBtn);
+      row.appendChild(delBtn);
     }
+    wrapper.appendChild(row);
+
+    // Transcription Text Block
+    if (audioData.transcription) {
+      const textRow = document.createElement('div');
+      textRow.style.display = 'flex';
+      textRow.style.alignItems = 'flex-start';
+      textRow.style.gap = '8px';
+      textRow.style.marginTop = '4px';
+      
+      const sttIcon = document.createElement('span');
+      sttIcon.innerHTML = '📝';
+      sttIcon.style.fontSize = '1.1rem';
+      sttIcon.style.marginTop = '4px';
+      textRow.appendChild(sttIcon);
+
+      const textEl = document.createElement('textarea');
+      textEl.style.flex = '1';
+      textEl.style.fontSize = '0.9rem';
+      textEl.style.color = '#fff';
+      textEl.style.padding = '8px';
+      textEl.style.background = 'rgba(0,0,0,0.3)';
+      textEl.style.border = '1px solid #444';
+      textEl.style.borderRadius = '4px';
+      textEl.style.resize = 'vertical';
+      textEl.style.minHeight = '40px';
+      textEl.value = audioData.transcription;
+      
+      if (!onChangeCallback) {
+        textEl.readOnly = true;
+      } else {
+        textEl.addEventListener('change', (e) => {
+          audioData.transcription = e.target.value;
+          // We don't necessarily need to trigger onChangeCallback just for a text change to avoid re-rendering while typing
+          // But when they blur/change, it's saved to the object.
+        });
+      }
+      textRow.appendChild(textEl);
+
+      if (onChangeCallback) {
+        const delTextBtn = document.createElement('button');
+        delTextBtn.type = 'button';
+        delTextBtn.innerHTML = '🗑️';
+        delTextBtn.title = '변환된 글자만 삭제';
+        delTextBtn.style.background = 'none';
+        delTextBtn.style.border = 'none';
+        delTextBtn.style.cursor = 'pointer';
+        delTextBtn.style.fontSize = '1.1rem';
+        delTextBtn.style.padding = '4px';
+        delTextBtn.addEventListener('click', () => {
+          audioData.transcription = '';
+          onChangeCallback(); // Re-render to remove the text block
+        });
+        textRow.appendChild(delTextBtn);
+      }
+      
+      wrapper.appendChild(textRow);
+    }
+
     container.appendChild(wrapper);
   });
 }
@@ -8288,12 +8589,10 @@ function handleAudioDictateClick(btnId, inputId, draftsArray, containerId, onCha
           }
         },
         (interimTranscript) => {
-          if (textField) {
-            if (AudioRecorder.initialText === undefined) {
-               AudioRecorder.initialText = textField.value;
-            }
-            const space = AudioRecorder.initialText.length > 0 && !AudioRecorder.initialText.endsWith(' ') ? ' ' : '';
-            textField.value = AudioRecorder.initialText + space + interimTranscript;
+          // Do not append to main text field anymore, we show it in the audio preview block
+          // But to show it's listening, we could update the button text temporarily
+          if (interimTranscript.trim() !== '') {
+            btn.innerHTML = '듣는 중...';
           }
         }
       );
@@ -8312,31 +8611,34 @@ document.addEventListener('DOMContentLoaded', () => {
     () => renderAudioPreviews('new-record-audio-previews', state.diaryDraftAudio, () => renderAudioPreviews('new-record-audio-previews', state.diaryDraftAudio, null)) // Will hook to renderDiary later
   );
   
-  // Toggle New Record Drawing Board
-  const btnToggleNewRecordDrawing = document.getElementById('btn-toggle-new-record-drawing');
-  const newRecordDrawingContainer = document.getElementById('new-record-drawing-container');
-  if (btnToggleNewRecordDrawing && newRecordDrawingContainer) {
-    btnToggleNewRecordDrawing.addEventListener('click', () => {
-      newRecordDrawingContainer.classList.toggle('hidden');
-      if (newRecordDrawingContainer.classList.contains('hidden')) {
-        newRecordDrawingContainer.style.display = 'none';
-      } else {
-        newRecordDrawingContainer.style.display = 'block';
+  // Fullscreen Drawing Modal Global Functions
+  window.currentDrawingBoard = null;
+  window.openFullscreenDrawing = function(initialData, onSaveCallback) {
+    const modal = document.getElementById('drawing-fullscreen-modal');
+    const container = document.getElementById('drawing-fullscreen-container');
+    if (!modal || !container) return;
+    
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // prevent bg scroll
+    
+    container.innerHTML = '';
+    window.currentDrawingBoard = new NeonDrawingBoard(container, {
+      initialData: initialData || [],
+      onClose: (data) => {
+        if (onSaveCallback) onSaveCallback(data);
+        window.closeFullscreenDrawing();
       }
     });
-  }
+  };
 
-  // Toggle Todo Edit Modal Drawing Board
-  const btnToggleTodoDrawing = document.getElementById('btn-toggle-todo-modal-drawing');
-  const todoDrawingContainer = document.getElementById('todo-edit-modal-drawing-container');
-  if (btnToggleTodoDrawing && todoDrawingContainer) {
-    btnToggleTodoDrawing.addEventListener('click', () => {
-      todoDrawingContainer.classList.toggle('hidden');
-      if (todoDrawingContainer.classList.contains('hidden')) {
-        todoDrawingContainer.style.display = 'none';
-      } else {
-        todoDrawingContainer.style.display = 'block';
-      }
-    });
-  }
+  window.closeFullscreenDrawing = function() {
+    const modal = document.getElementById('drawing-fullscreen-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+    document.body.style.overflow = '';
+    window.currentDrawingBoard = null;
+  };
 });

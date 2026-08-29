@@ -2,12 +2,36 @@ class NeonDrawingBoard {
   constructor(container, options = {}) {
     this.container = container;
     this.onChange = options.onChange || null;
+    this.onClose = options.onClose || null;
     this.readOnly = options.readOnly || false;
 
     // Load initial data
-    this.strokes = options.initialData ? JSON.parse(JSON.stringify(options.initialData)) : [];
+    
+    // Multi-page State
+    this.isMultiPage = false;
+    this.pdfFileId = null;
+    this._pages = [{ type: 'blank', _strokes: [], bgCanvas: null }];
+    this.currentPageIndex = 0;
+    
+    Object.defineProperty(this, 'strokes', {
+      get: () => this._pages[this.currentPageIndex]._strokes,
+      set: (val) => { this._pages[this.currentPageIndex]._strokes = val; }
+    });
+
+    // Load initial data
+    if (options.initialData && !Array.isArray(options.initialData) && options.initialData.type === 'pdf_drawing') {
+      this.isMultiPage = true;
+      this.pdfFileId = options.initialData.pdfFileId;
+      this._pages = options.initialData.strokesPerPage.map(st => ({ type: 'pdf', _strokes: st, bgCanvas: null }));
+      this.loadExistingPdf();
+    } else {
+      this.strokes = options.initialData ? JSON.parse(JSON.stringify(options.initialData)) : [];
+    }
+    
     const bgStroke = this.strokes.find(s => s.isBg);
-    this.bgColor = bgStroke ? bgStroke.color : '#1e1e1e';
+
+    const savedBg = localStorage.getItem('planeer_drawing_bg');
+    this.bgColor = bgStroke ? bgStroke.color : (savedBg || '#1e1e1e');
     this.undoStack = [];
     this.redoStack = [];
 
@@ -20,8 +44,10 @@ class NeonDrawingBoard {
     this.highlighterSize = 15;
     this.highlighterOpacity = 0.4;
     
-    this.penPresets = JSON.parse(localStorage.getItem('planeer_pen_presets')) || ['#ffffff', '#ff4d4d', '#4da6ff'];
-    this.hlPresets = JSON.parse(localStorage.getItem('planeer_hl_presets')) || ['#facc15', '#ff7b72', '#79c0ff'];
+    this.penPresets = JSON.parse(localStorage.getItem('planeer_pen_presets')) || ['#ffffff', '#ff4d4d', '#4da6ff', '#50c878', '#facc15'];
+    if (this.penPresets.length < 5) this.penPresets = [...this.penPresets, '#ffffff', '#ff4d4d', '#4da6ff', '#50c878', '#facc15'].slice(0, 5);
+    this.hlPresets = JSON.parse(localStorage.getItem('planeer_hl_presets')) || ['#facc15', '#ff7b72', '#79c0ff', '#50c878', '#d8b4e2'];
+    if (this.hlPresets.length < 5) this.hlPresets = [...this.hlPresets, '#facc15', '#ff7b72', '#79c0ff', '#50c878', '#d8b4e2'].slice(0, 5);
 
     // Interaction state
     this.isDrawing = false;
@@ -67,7 +93,26 @@ class NeonDrawingBoard {
     
     // Toolbar
     if (!this.readOnly) {
-      this.toolbar = document.createElement('div');
+      
+    // Sidebar
+    this.sidebar = document.createElement('div');
+    this.sidebar.className = 'drawing-sidebar hidden';
+    this.sidebar.innerHTML = `
+      <div class="sidebar-header">
+        <label class="sidebar-btn" style="display:block; text-align:center; cursor:pointer;">
+          📄 PDF 불러오기
+          <input type="file" id="pdf-import-input" accept="application/pdf" style="display:none">
+        </label>
+      </div>
+      <div id="drawing-thumbnails" class="sidebar-thumbnails"></div>
+    `;
+    this.container.appendChild(this.sidebar);
+    
+    this.sidebar.querySelector('#pdf-import-input').addEventListener('change', (e) => this.handlePdfImport(e));
+
+    // Floating Toolbar
+    this.toolbar = document.createElement('div');
+
       this.toolbar.className = 'neon-drawing-toolbar';
       this.buildToolbar();
       this.wrapper.appendChild(this.toolbar);
@@ -84,6 +129,12 @@ class NeonDrawingBoard {
     this.canvas.style.touchAction = 'none';
 
     this.canvasContainer.appendChild(this.canvas);
+    
+    this.zoomIndicator = document.createElement('div');
+    this.zoomIndicator.style.cssText = 'position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.6); color:white; padding:4px 8px; border-radius:6px; font-size:0.8rem; pointer-events:none; z-index:100; transition: opacity 0.3s;';
+    this.zoomIndicator.innerText = '100%';
+    this.canvasContainer.appendChild(this.zoomIndicator);
+    
     this.wrapper.appendChild(this.canvasContainer);
     this.container.appendChild(this.wrapper);
 
@@ -113,21 +164,19 @@ class NeonDrawingBoard {
       <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto; border-left: 1px solid #444; padding-left: 8px;">
         <span style="font-size:0.8rem; color:#aaa; margin-right:4px;">배경지</span>
         <div class="bg-presets" style="display:flex; gap:4px;">
-          <button class="bg-preset-btn" data-color="#1e1e1e" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#1e1e1e' ? '#3b82f6' : '#555'}; background-color:#1e1e1e; cursor:pointer;" title="기본(어두운색)"></button>
-          <button class="bg-preset-btn" data-color="#ffffff" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffffff' ? '#3b82f6' : '#ccc'}; background-color:#ffffff; cursor:pointer;" title="흰색"></button>
-          <button class="bg-preset-btn" data-color="#fdfd96" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#fdfd96' ? '#3b82f6' : '#ccc'}; background-color:#fdfd96; cursor:pointer;" title="연노랑"></button>
-          <button class="bg-preset-btn" data-color="#b5ead7" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#b5ead7' ? '#3b82f6' : '#ccc'}; background-color:#b5ead7; cursor:pointer;" title="연민트"></button>
-          <button class="bg-preset-btn" data-color="#ffb7b2" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffb7b2' ? '#3b82f6' : '#ccc'}; background-color:#ffb7b2; cursor:pointer;" title="연분홍"></button>
-          <button class="bg-preset-btn" data-color="#c7ceea" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#c7ceea' ? '#3b82f6' : '#ccc'}; background-color:#c7ceea; cursor:pointer;" title="연파랑"></button>
+          <input type="color" id="bg-color-picker" class="color-picker" value="${this.bgColor}" title="배경색 변경" style="width:24px; height:24px; padding:0; border:2px solid #555; border-radius:50%; cursor:pointer;">
         </div>
       </div>
       <div class="drawing-actions">
         <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
+        <button class="action-btn" id="btn-toggle-sidebar" title="페이지 목록">📑</button>
+        <button class="action-btn" id="btn-export-pdf" title="PDF로 다운로드" style="display:none">📥</button>
         <button class="action-btn" id="btn-reset-view" title="1:1 화면 초기화">🔍</button>
         <button class="action-btn" id="btn-pen-mode" title="손가락 그리기 허용됨 (클릭하여 펜 전용 모드로 전환)">👆</button>
         <button class="action-btn" id="btn-undo" title="실행 취소">↩️</button>
         <button class="action-btn" id="btn-redo" title="다시 실행">↪️</button>
         <button class="action-btn" id="btn-clear" title="전체 지우기">🗑️</button>
+        ${this.onClose ? `<button class="drawing-toolbar-close-btn" id="btn-close-drawing" title="저장 후 닫기">저장/닫기</button>` : ''}
       </div>
     `;
 
@@ -167,31 +216,128 @@ class NeonDrawingBoard {
       });
     }
 
-    const bgPresetBtns = this.toolbar.querySelectorAll('.bg-preset-btn');
-    bgPresetBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    const btnClose = this.toolbar.querySelector('#btn-close-drawing');
+    if (btnClose && this.onClose) {
+      btnClose.addEventListener('click', (e) => {
         e.preventDefault();
-        this.bgColor = btn.dataset.color;
+        this.onClose(this.getData());
+      });
+    }
+
+    const bgColorPicker = this.toolbar.querySelector('#bg-color-picker');
+    if (bgColorPicker) {
+      bgColorPicker.addEventListener('input', (e) => {
+        this.bgColor = e.target.value;
+        localStorage.setItem('planeer_drawing_bg', this.bgColor);
         this.canvasContainer.style.backgroundColor = this.bgColor;
         this.strokes = this.strokes.filter(s => !s.isBg);
         this.strokes.unshift({ isBg: true, color: this.bgColor });
         this.saveState();
-        
-        // Update active styling
-        bgPresetBtns.forEach(b => {
-          b.style.borderColor = (b.dataset.color === '#1e1e1e') ? '#555' : '#ccc';
-        });
-        btn.style.borderColor = '#3b82f6';
       });
-    });
+    }
+
+    
+    
+    const btnExportPdf = this.toolbar.querySelector('#btn-export-pdf');
+    if (btnExportPdf) {
+      if (this.isMultiPage) {
+        btnExportPdf.style.display = 'inline-block';
+      }
+      btnExportPdf.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const originalText = btnExportPdf.innerHTML;
+          btnExportPdf.innerHTML = '⏳';
+          
+          const { PDFDocument } = window.PDFLib;
+          const pdfDoc = await PDFDocument.create();
+          
+          for (let i = 0; i < this._pages.length; i++) {
+            const pageObj = this._pages[i];
+            
+            // Create a temp canvas matching the page size
+            const tempCanvas = document.createElement('canvas');
+            const targetWidth = pageObj.width || this.canvas.width;
+            const targetHeight = pageObj.height || this.canvas.height;
+            tempCanvas.width = targetWidth;
+            tempCanvas.height = targetHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Draw background
+            if (pageObj.bgCanvas) {
+               tempCtx.drawImage(pageObj.bgCanvas, 0, 0, targetWidth, targetHeight);
+            } else {
+               tempCtx.fillStyle = this.bgColor;
+               tempCtx.fillRect(0, 0, targetWidth, targetHeight);
+            }
+            
+            // Draw strokes
+            pageObj._strokes.forEach(stroke => {
+              tempCtx.beginPath();
+              tempCtx.lineCap = 'round'; tempCtx.lineJoin = 'round';
+              tempCtx.lineWidth = stroke.size; tempCtx.strokeStyle = stroke.color; tempCtx.globalAlpha = stroke.opacity || 1;
+              
+              if (stroke.tool === 'highlighter') {
+                tempCtx.globalCompositeOperation = 'multiply';
+              }
+              
+              stroke.points.forEach((pt, j) => {
+                if (j===0) tempCtx.moveTo(pt.x, pt.y); else tempCtx.lineTo(pt.x, pt.y);
+              });
+              tempCtx.stroke();
+              tempCtx.globalCompositeOperation = 'source-over';
+            });
+            
+            // Embed to PDF
+            const pngDataUrl = tempCanvas.toDataURL('image/png');
+            const pngImage = await pdfDoc.embedPng(pngDataUrl);
+            
+            const pdfPage = pdfDoc.addPage([targetWidth, targetHeight]);
+            pdfPage.drawImage(pngImage, {
+              x: 0,
+              y: 0,
+              width: targetWidth,
+              height: targetHeight
+            });
+          }
+          
+          const pdfBytes = await pdfDoc.save();
+          const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'edited_planeer_notes.pdf';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          btnExportPdf.innerHTML = originalText;
+        } catch(err) {
+          console.error('PDF Export Error:', err);
+          alert('PDF 다운로드 중 오류가 발생했습니다.');
+          btnExportPdf.innerHTML = '📥';
+        }
+      });
+    }
+
+    const btnToggleSidebar = this.toolbar.querySelector('#btn-toggle-sidebar');
+    if (btnToggleSidebar) {
+      btnToggleSidebar.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.sidebar.classList.toggle('hidden');
+      });
+    }
 
     const btnResetView = this.toolbar.querySelector('#btn-reset-view');
+
     if (btnResetView) {
       btnResetView.addEventListener('click', (e) => {
         e.preventDefault();
         this.viewScale = 1;
         this.panX = 0;
         this.panY = 0;
+        this.updateZoomIndicator();
         this.render();
       });
     }
@@ -233,13 +379,27 @@ class NeonDrawingBoard {
     this.updateSettingsUI();
   }
 
+  updateZoomIndicator() {
+    if (this.zoomIndicator) {
+      this.zoomIndicator.innerText = Math.round(this.viewScale * 100) + '%';
+      this.zoomIndicator.style.opacity = '1';
+      clearTimeout(this.zoomTimer);
+      this.zoomTimer = setTimeout(() => {
+        this.zoomIndicator.style.opacity = '0.4';
+      }, 1500);
+    }
+  }
+
   updateSettingsUI() {
     this.settingsContainer.innerHTML = '';
     
     const renderPresets = (presets) => {
-      return presets.map((color, idx) => 
-        `<button class="preset-color" style="background:${color}; width:24px; height:24px; border-radius:50%; border:1px solid #555; cursor:pointer; padding:0;" data-index="${idx}" data-color="${color}" title="길게 누르면 색상 변경"></button>`
-      ).join('');
+      return presets.map((color, idx) => {
+        const isActive = (this.currentTool === 'pen' && this.penColor === color) || (this.currentTool === 'highlighter' && this.highlighterColor === color);
+        const borderStyle = isActive ? '2px solid #fff' : '2px solid transparent';
+        const boxShadow = isActive ? '0 0 0 2px #3b82f6' : '0 0 0 1px #555';
+        return `<button class="preset-color" style="background:${color}; width:26px; height:26px; border-radius:50%; border:${borderStyle}; box-shadow:${boxShadow}; cursor:pointer; padding:0;" data-index="${idx}" data-color="${color}" title="클릭하여 선택 (다시 클릭 시 색상 변경)"></button>`;
+      }).join('');
     };
 
     if (this.currentTool === 'pen') {
@@ -287,41 +447,21 @@ class NeonDrawingBoard {
       });
 
       this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
-        let pressTimer;
-        
-        const startPress = (e) => {
-          if (e.type === 'touchstart') e.preventDefault(); // Prevent text selection on mobile
-          pressTimer = setTimeout(() => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const color = btn.dataset.color;
+          const isActive = (isPen ? this.penColor : this.highlighterColor) === color;
+          
+          if (isActive) {
             targetPresetIndex = parseInt(btn.dataset.index);
-            hiddenPicker.value = btn.dataset.color;
+            hiddenPicker.value = color;
             hiddenPicker.click();
-            pressTimer = null;
-          }, 500);
-        };
-        
-        const endPress = (e) => {
-          if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-            const color = btn.dataset.color;
+          } else {
             if (isPen) this.penColor = color;
             else this.highlighterColor = color;
             this.settingsContainer.querySelector(colorInputId).value = color;
+            this.updateSettingsUI(); // Re-render to update active borders
           }
-        };
-
-        btn.addEventListener('mousedown', startPress);
-        btn.addEventListener('touchstart', startPress, {passive: false});
-        btn.addEventListener('mouseup', endPress);
-        btn.addEventListener('mouseleave', () => { if(pressTimer) clearTimeout(pressTimer); });
-        btn.addEventListener('touchend', endPress);
-        
-        btn.addEventListener('contextmenu', e => {
-          e.preventDefault();
-          if(pressTimer) clearTimeout(pressTimer);
-          targetPresetIndex = parseInt(btn.dataset.index);
-          hiddenPicker.value = btn.dataset.color;
-          hiddenPicker.click();
         });
       });
 
@@ -442,6 +582,7 @@ class NeonDrawingBoard {
       this.panX = (midX - rect.left) - this.pinchPanStartX * (newScale / this.initialScale);
       this.panY = (midY - rect.top) - this.pinchPanStartY * (newScale / this.initialScale);
       
+      this.updateZoomIndicator();
       this.render();
       return;
     }
@@ -467,6 +608,10 @@ class NeonDrawingBoard {
     const physicalY = pos.y * this.viewScale + this.panY;
     if (physicalY > containerHeight - 50) {
       this.canvasContainer.style.minHeight = `${containerHeight + 300}px`;
+      // Auto-scroll down if inside scrollable modal
+      if (this.wrapper && this.wrapper.scrollHeight > this.wrapper.clientHeight) {
+        this.wrapper.scrollTop += 20;
+      }
     }
 
     const activeTool = this.isTempEraser ? 'eraser' : this.currentTool;
@@ -674,9 +819,205 @@ class NeonDrawingBoard {
     }
   }
 
+  
+  async handlePdfImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      if (!window.pdfjsLib) throw new Error("PDF.js not loaded");
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      // Save PDF to FileDB
+      const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+      this.pdfFileId = await FileDB.saveFile(blob, 'pdf', file.name);
+      
+      this.isMultiPage = true;
+      this._pages = [];
+      this.undoStack = [];
+      this.redoStack = [];
+      
+      const scale = 2.0; // High resolution rendering
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale });
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        
+        this._pages.push({
+          type: 'pdf',
+          pdfPageNum: i,
+          width: viewport.width,
+          height: viewport.height,
+          bgCanvas: canvas,
+          _strokes: []
+        });
+      }
+      
+      this.currentPageIndex = 0;
+      this.updateSidebar();
+      const expBtn = this.toolbar.querySelector("#btn-export-pdf"); if(expBtn) expBtn.style.display="inline-block";
+      this.resetViewToPage();
+    } catch (err) {
+      console.error("PDF Import Error:", err);
+      alert("PDF를 불러오는 중 오류가 발생했습니다.");
+    }
+  }
+
+  async loadExistingPdf() {
+    if (!this.pdfFileId || !window.pdfjsLib) return;
+    try {
+      const fileRecord = await FileDB.getFile(this.pdfFileId);
+      if (!fileRecord || !fileRecord.blob) return;
+      
+      const arrayBuffer = await fileRecord.blob.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const scale = 2.0;
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        if (i - 1 < this._pages.length) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          this._pages[i-1].bgCanvas = canvas;
+          this._pages[i-1].width = viewport.width;
+          this._pages[i-1].height = viewport.height;
+        }
+      }
+      this.updateSidebar();
+      this.resetViewToPage();
+    } catch(e) {
+      console.error("Existing PDF Load Error", e);
+    }
+  }
+
+  resetViewToPage() {
+    const page = this._pages[this.currentPageIndex];
+    if (page && page.width) {
+      // Fit page to screen
+      const scaleX = this.container.clientWidth / page.width;
+      const scaleY = this.container.clientHeight / page.height;
+      this.viewScale = Math.min(scaleX, scaleY) * 0.9; // 90% fit
+      this.panX = (this.container.clientWidth - (page.width * this.viewScale)) / 2;
+      this.panY = 20; // Slight top margin
+    } else {
+      this.viewScale = 1;
+      this.panX = 0;
+      this.panY = 0;
+    }
+    this.render();
+  }
+
+  switchPage(index) {
+    if (index < 0 || index >= this._pages.length || index === this.currentPageIndex) return;
+    this.currentPageIndex = index;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.updateSidebar();
+    this.resetViewToPage();
+  }
+
+  updateSidebar() {
+    const container = this.sidebar.querySelector('#drawing-thumbnails');
+    container.innerHTML = '';
+    
+    this._pages.forEach((page, idx) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'page-thumbnail' + (idx === this.currentPageIndex ? ' active' : '');
+      thumb.draggable = true;
+      
+      if (page.bgCanvas) {
+        // Create thumbnail sized canvas
+        const tCanvas = document.createElement('canvas');
+        tCanvas.width = 150;
+        tCanvas.height = 150 * (page.bgCanvas.height / page.bgCanvas.width);
+        const tCtx = tCanvas.getContext('2d');
+        tCtx.drawImage(page.bgCanvas, 0, 0, tCanvas.width, tCanvas.height);
+        
+        // Draw strokes on thumbnail
+        const pScale = tCanvas.width / page.bgCanvas.width;
+        tCtx.scale(pScale, pScale);
+        page._strokes.forEach(s => {
+          tCtx.beginPath();
+          tCtx.lineCap = 'round'; tCtx.lineJoin = 'round';
+          tCtx.lineWidth = s.size; tCtx.strokeStyle = s.color; tCtx.globalAlpha = s.opacity || 1;
+          s.points.forEach((pt, i) => {
+            if (i===0) tCtx.moveTo(pt.x, pt.y); else tCtx.lineTo(pt.x, pt.y);
+          });
+          tCtx.stroke();
+        });
+        
+        thumb.appendChild(tCanvas);
+      } else {
+        thumb.style.height = '150px';
+        thumb.style.background = '#333';
+      }
+      
+      const num = document.createElement('div');
+      num.className = 'page-thumbnail-num';
+      num.textContent = (idx + 1);
+      thumb.appendChild(num);
+      
+      thumb.addEventListener('click', () => this.switchPage(idx));
+      
+      // Drag and drop
+      thumb.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', idx);
+        thumb.style.opacity = '0.5';
+      });
+      thumb.addEventListener('dragend', () => {
+        thumb.style.opacity = '1';
+        container.querySelectorAll('.page-thumbnail').forEach(el => el.classList.remove('drag-over'));
+      });
+      thumb.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        thumb.classList.add('drag-over');
+      });
+      thumb.addEventListener('dragleave', () => {
+        thumb.classList.remove('drag-over');
+      });
+      thumb.addEventListener('drop', (e) => {
+        e.preventDefault();
+        thumb.classList.remove('drag-over');
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+        const toIdx = idx;
+        if (fromIdx !== toIdx) {
+          const moved = this._pages.splice(fromIdx, 1)[0];
+          this._pages.splice(toIdx, 0, moved);
+          if (this.currentPageIndex === fromIdx) this.currentPageIndex = toIdx;
+          else if (fromIdx < this.currentPageIndex && toIdx >= this.currentPageIndex) this.currentPageIndex--;
+          else if (fromIdx > this.currentPageIndex && toIdx <= this.currentPageIndex) this.currentPageIndex++;
+          this.updateSidebar();
+        }
+      });
+      
+      container.appendChild(thumb);
+    });
+  }
+
+  
   getData() {
+    if (this.isMultiPage) {
+      return {
+        type: 'pdf_drawing',
+        pdfFileId: this.pdfFileId,
+        strokesPerPage: this._pages.map(p => p._strokes)
+      };
+    }
     return this.strokes;
   }
+
 
   fitContent() {
     if (!this.strokes || this.strokes.length === 0) return;
@@ -712,6 +1053,7 @@ class NeonDrawingBoard {
     const scaledHeight = (maxY - minY + padding * 2) * this.viewScale;
     this.panX = (rect.width - scaledWidth) / 2 - (minX - padding) * this.viewScale;
     this.panY = (rect.height - scaledHeight) / 2 - (minY - padding) * this.viewScale;
+    this.updateZoomIndicator();
   }
 
   resize() {
@@ -736,9 +1078,16 @@ class NeonDrawingBoard {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.ctx.save();
+    
     // Apply pan and zoom
     this.ctx.translate(this.panX, this.panY);
     this.ctx.scale(this.viewScale, this.viewScale);
+
+    const currentPage = this._pages[this.currentPageIndex];
+    if (currentPage && currentPage.bgCanvas) {
+      this.ctx.drawImage(currentPage.bgCanvas, 0, 0);
+    }
+
 
     // Draw saved strokes
     this.strokes.forEach(stroke => this.drawStroke(stroke));

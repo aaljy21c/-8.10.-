@@ -84,6 +84,44 @@ class NeonDrawingBoard {
     this.canvas.style.touchAction = 'none';
 
     this.canvasContainer.appendChild(this.canvas);
+    
+    // Add floating eraser toggle
+    if (!this.readOnly) {
+      this.floatingEraserBtn = document.createElement('button');
+      this.floatingEraserBtn.className = 'floating-eraser-toggle';
+      this.floatingEraserBtn.innerHTML = '🧽';
+      this.floatingEraserBtn.title = '지우개 빠른 전환';
+      
+      let prevTool = 'pen';
+      
+      // We use pointerdown instead of click for faster response on touch
+      this.floatingEraserBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (this.currentTool === 'eraser') {
+          // Switch back to previous tool
+          this.currentTool = prevTool;
+          this.floatingEraserBtn.classList.remove('active');
+        } else {
+          // Switch to eraser
+          prevTool = this.currentTool;
+          this.currentTool = 'eraser';
+          this.floatingEraserBtn.classList.add('active');
+        }
+        
+        // Sync toolbar UI
+        const toolBtns = this.toolbar.querySelectorAll('.tool-btn');
+        toolBtns.forEach(b => b.classList.remove('active'));
+        const activeBtn = this.toolbar.querySelector(`.tool-btn[data-tool="${this.currentTool}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+        
+        this.updateSettingsUI();
+      });
+      
+      this.canvasContainer.appendChild(this.floatingEraserBtn);
+    }
+    
     this.wrapper.appendChild(this.canvasContainer);
     this.container.appendChild(this.wrapper);
 
@@ -111,15 +149,16 @@ class NeonDrawingBoard {
       <div class="drawing-settings">
         <!-- Settings dynamically change based on tool -->
       </div>
-      <div class="global-settings" style="display:none; align-items:center; gap:4px; margin-left:auto; border-left: 1px solid #444; padding-left: 8px;">
+      <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto; border-left: 1px solid #444; padding-left: 8px;">
         <span style="font-size:0.8rem; color:#aaa; margin-right:4px;">배경지</span>
-        <div class="bg-presets" style="display:flex; gap:4px;">
+        <div class="bg-presets" style="display:flex; gap:4px; align-items:center;">
           <button class="bg-preset-btn" data-color="#1e1e1e" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#1e1e1e' ? '#3b82f6' : '#555'}; background-color:#1e1e1e; cursor:pointer;" title="기본(어두운색)"></button>
           <button class="bg-preset-btn" data-color="#ffffff" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffffff' ? '#3b82f6' : '#ccc'}; background-color:#ffffff; cursor:pointer;" title="흰색"></button>
           <button class="bg-preset-btn" data-color="#fdfd96" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#fdfd96' ? '#3b82f6' : '#ccc'}; background-color:#fdfd96; cursor:pointer;" title="연노랑"></button>
           <button class="bg-preset-btn" data-color="#b5ead7" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#b5ead7' ? '#3b82f6' : '#ccc'}; background-color:#b5ead7; cursor:pointer;" title="연민트"></button>
           <button class="bg-preset-btn" data-color="#ffb7b2" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffb7b2' ? '#3b82f6' : '#ccc'}; background-color:#ffb7b2; cursor:pointer;" title="연분홍"></button>
           <button class="bg-preset-btn" data-color="#c7ceea" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#c7ceea' ? '#3b82f6' : '#ccc'}; background-color:#c7ceea; cursor:pointer;" title="연파랑"></button>
+          <input type="color" id="custom-bg-color" class="color-picker" value="${this.bgColor}" style="width:20px; height:20px; border:none; cursor:pointer; padding:0; background:transparent;" title="사용자 지정 배경색">
         </div>
       </div>
       <div class="drawing-actions">
@@ -170,22 +209,33 @@ class NeonDrawingBoard {
     }
 
     const bgPresetBtns = this.toolbar.querySelectorAll('.bg-preset-btn');
+    const updateBgColor = (color) => {
+      this.bgColor = color;
+      this.canvasContainer.style.backgroundColor = this.bgColor;
+      this.strokes = this.strokes.filter(s => !s.isBg);
+      this.strokes.unshift({ isBg: true, color: this.bgColor });
+      this.saveState();
+      
+      bgPresetBtns.forEach(b => {
+        b.style.borderColor = (b.dataset.color === color) ? '#3b82f6' : (b.dataset.color === '#1e1e1e' ? '#555' : '#ccc');
+      });
+      const customPicker = this.toolbar.querySelector('#custom-bg-color');
+      if (customPicker) customPicker.value = color;
+    };
+
     bgPresetBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        this.bgColor = btn.dataset.color;
-        this.canvasContainer.style.backgroundColor = this.bgColor;
-        this.strokes = this.strokes.filter(s => !s.isBg);
-        this.strokes.unshift({ isBg: true, color: this.bgColor });
-        this.saveState();
-        
-        // Update active styling
-        bgPresetBtns.forEach(b => {
-          b.style.borderColor = (b.dataset.color === '#1e1e1e') ? '#555' : '#ccc';
-        });
-        btn.style.borderColor = '#3b82f6';
+        updateBgColor(btn.dataset.color);
       });
     });
+
+    const customBgColor = this.toolbar.querySelector('#custom-bg-color');
+    if (customBgColor) {
+      customBgColor.addEventListener('input', (e) => {
+        updateBgColor(e.target.value);
+      });
+    }
 
     const btnResetView = this.toolbar.querySelector('#btn-reset-view');
     if (btnResetView) {

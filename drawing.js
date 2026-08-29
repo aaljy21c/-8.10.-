@@ -7,7 +7,7 @@ class NeonDrawingBoard {
     // Load initial data
     this.strokes = options.initialData ? JSON.parse(JSON.stringify(options.initialData)) : [];
     const bgStroke = this.strokes.find(s => s.isBg);
-    this.bgColor = bgStroke ? bgStroke.color : '#1e1e1e';
+    this.bgColor = bgStroke ? bgStroke.color : (localStorage.getItem('planeer_bg_color') || '#1e1e1e');
     this.undoStack = [];
     this.redoStack = [];
 
@@ -152,13 +152,7 @@ class NeonDrawingBoard {
       <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto; border-left: 1px solid #444; padding-left: 8px;">
         <span style="font-size:0.8rem; color:#aaa; margin-right:4px;">배경지</span>
         <div class="bg-presets" style="display:flex; gap:4px; align-items:center;">
-          <button class="bg-preset-btn" data-color="#1e1e1e" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#1e1e1e' ? '#3b82f6' : '#555'}; background-color:#1e1e1e; cursor:pointer;" title="기본(어두운색)"></button>
-          <button class="bg-preset-btn" data-color="#ffffff" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffffff' ? '#3b82f6' : '#ccc'}; background-color:#ffffff; cursor:pointer;" title="흰색"></button>
-          <button class="bg-preset-btn" data-color="#fdfd96" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#fdfd96' ? '#3b82f6' : '#ccc'}; background-color:#fdfd96; cursor:pointer;" title="연노랑"></button>
-          <button class="bg-preset-btn" data-color="#b5ead7" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#b5ead7' ? '#3b82f6' : '#ccc'}; background-color:#b5ead7; cursor:pointer;" title="연민트"></button>
-          <button class="bg-preset-btn" data-color="#ffb7b2" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffb7b2' ? '#3b82f6' : '#ccc'}; background-color:#ffb7b2; cursor:pointer;" title="연분홍"></button>
-          <button class="bg-preset-btn" data-color="#c7ceea" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#c7ceea' ? '#3b82f6' : '#ccc'}; background-color:#c7ceea; cursor:pointer;" title="연파랑"></button>
-          <input type="color" id="custom-bg-color" class="color-picker" value="${this.bgColor}" style="width:20px; height:20px; border:none; cursor:pointer; padding:0; background:transparent;" title="사용자 지정 배경색">
+          <input type="color" id="custom-bg-color" class="color-picker" value="${this.bgColor}" style="width:28px; height:28px; border:none; cursor:pointer; padding:0; background:transparent;" title="클릭하여 배경색 변경">
         </div>
       </div>
       <div class="drawing-actions">
@@ -349,23 +343,18 @@ class NeonDrawingBoard {
       });
 
       this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
-        let pressTimer;
-        
-        const startPress = (e) => {
-          if (e.type === 'touchstart') e.preventDefault(); // Prevent text selection on mobile
-          pressTimer = setTimeout(() => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const color = btn.dataset.color;
+          const isActive = (isPen && this.penColor === color) || (!isPen && this.highlighterColor === color);
+          
+          if (isActive) {
+            // If already active, open color picker to change it
             targetPresetIndex = parseInt(btn.dataset.index);
-            hiddenPicker.value = btn.dataset.color;
+            hiddenPicker.value = color;
             hiddenPicker.click();
-            pressTimer = null;
-          }, 500);
-        };
-        
-        const endPress = (e) => {
-          if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-            const color = btn.dataset.color;
+          } else {
+            // If not active, just set it as active
             if (isPen) {
               this.penColor = color;
               localStorage.setItem('planeer_pen_color', color);
@@ -376,17 +365,11 @@ class NeonDrawingBoard {
             this.settingsContainer.querySelector(colorInputId).value = color;
             this.updateSettingsUI();
           }
-        };
-
-        btn.addEventListener('mousedown', startPress);
-        btn.addEventListener('touchstart', startPress, {passive: false});
-        btn.addEventListener('mouseup', endPress);
-        btn.addEventListener('mouseleave', () => { if(pressTimer) clearTimeout(pressTimer); });
-        btn.addEventListener('touchend', endPress);
+        });
         
+        // Keep right click / long press as a fallback
         btn.addEventListener('contextmenu', e => {
           e.preventDefault();
-          if(pressTimer) clearTimeout(pressTimer);
           targetPresetIndex = parseInt(btn.dataset.index);
           hiddenPicker.value = btn.dataset.color;
           hiddenPicker.click();

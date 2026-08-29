@@ -1764,7 +1764,7 @@ body.light-theme .lightness-slider {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   position: relative;
   z-index: 1100;
-  flex-wrap: nowrap !important;
+  flex-wrap: wrap !important;
   gap: 10px;
 }
 
@@ -1994,7 +1994,8 @@ body.light-theme .search-result-card:hover {
   display: flex !important;
   align-items: center;
   gap: 5px;
-  flex-wrap: nowrap !important;
+  flex-wrap: wrap !important;
+  justify-content: center;
   width: auto;
   margin: 0;
   flex-shrink: 0;

@@ -387,7 +387,15 @@ class NeonDrawingBoard {
     this.canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
     this.canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
     this.canvas.addEventListener('pointerout', this.onPointerUp.bind(this));
-    this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+    this.canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      // Intercept S-Pen side button press which often fires contextmenu on Android
+      if (this.isDrawing && this.currentStroke) {
+        this.currentStroke = null;
+        this.points = [];
+        this.isTempEraser = true;
+      }
+    });
   }
 
   getPointerPos(e) {
@@ -405,7 +413,12 @@ class NeonDrawingBoard {
     const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4);
     if (e.pointerType === 'mouse' && e.button !== 0 && !isEraserButton) return;
     
-    this.isTempEraser = isEraserButton;
+    // Preserve hover state for S-Pen because Android touch layer often masks the button press during pointerdown
+    if (e.pointerType === 'pen' && this.isTempEraser) {
+      // Keep this.isTempEraser as true
+    } else {
+      this.isTempEraser = isEraserButton;
+    }
     
     if (this.penOnlyMode && e.pointerType === 'touch') {
       this.activePointers.set(e.pointerId, e);

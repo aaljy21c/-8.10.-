@@ -387,13 +387,19 @@ class NeonDrawingBoard {
     this.canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
     this.canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
     this.canvas.addEventListener('pointerout', this.onPointerUp.bind(this));
+    this.canvas.addEventListener('pointercancel', this.onPointerUp.bind(this));
     this.canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
       // Intercept S-Pen side button press which often fires contextmenu on Android
+      this.isTempEraser = true;
       if (this.isDrawing && this.currentStroke) {
         this.currentStroke = null;
         this.points = [];
-        this.isTempEraser = true;
+      } else if (!this.isDrawing) {
+        this.isDrawing = true;
+        this.points = [];
+        const pos = this.getPointerPos(e);
+        this.eraseAt(pos);
       }
     });
   }
@@ -410,7 +416,7 @@ class NeonDrawingBoard {
     if (this.readOnly) return;
     this.clearHoldTimer();
     
-    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4);
+    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4) || e.altKey || e.ctrlKey || e.shiftKey || e.metaKey;
     if (e.pointerType === 'mouse' && e.button !== 0 && !isEraserButton) return;
     
     // Preserve hover state for S-Pen because Android touch layer often masks the button press during pointerdown
@@ -527,7 +533,7 @@ class NeonDrawingBoard {
     }
 
     // Dynamically check if eraser button is pressed during move
-    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4);
+    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4) || e.altKey || e.ctrlKey || e.shiftKey || e.metaKey;
     if (isEraserButton) {
       this.isTempEraser = true;
     } else if (e.pointerType === 'mouse') { 

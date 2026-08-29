@@ -4,6 +4,7 @@
   border: 1px solid var(--panel-border, #333);
   border-radius: 8px;
   background-color: var(--card-bg, #1e1e1e);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   margin-top: 8px;
@@ -116,46 +117,4 @@
   width: 100%;
   height: 100%;
   touch-action: none; /* Crucial for mobile drawing */
-}
-
-.floating-eraser-toggle {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: var(--card-bg, #2a2a2a);
-  border: 2px solid var(--panel-border, #444);
-  color: #fff;
-  font-size: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  z-index: 50;
-  transition: all 0.2s ease;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.floating-eraser-toggle:active {
-  transform: scale(0.9);
-}
-
-.floating-eraser-toggle.active {
-  background-color: var(--neon-accent, #eab308);
-  border-color: #fff;
-  box-shadow: 0 0 15px rgba(234, 179, 8, 0.6);
-}
-
-@media (max-width: 600px) {
-  .neon-drawing-toolbar { gap: 12px; }
-  .drawing-settings { flex-basis: 100%; min-width: 100%; margin-top: 4px; }
-  .global-settings { flex-basis: 100%; min-width: 100%; margin-top: 4px; }
-  #global-drawing-modal .lightbox-content > div:first-child {
-    flex-wrap: wrap !important;
-    gap: 8px !important;
-  }
 }

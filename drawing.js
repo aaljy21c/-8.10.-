@@ -7,21 +7,21 @@ class NeonDrawingBoard {
     // Load initial data
     this.strokes = options.initialData ? JSON.parse(JSON.stringify(options.initialData)) : [];
     const bgStroke = this.strokes.find(s => s.isBg);
-    this.bgColor = bgStroke ? bgStroke.color : (localStorage.getItem('planeer_bg_color') || '#1e1e1e');
+    this.bgColor = bgStroke ? bgStroke.color : '#1e1e1e';
     this.undoStack = [];
     this.redoStack = [];
 
     // Settings
     this.currentTool = 'pen'; // pen, highlighter, eraser, lasso
-    this.penColor = localStorage.getItem('planeer_pen_color') || '#ffffff';
-    this.penSize = parseInt(localStorage.getItem('planeer_pen_size')) || 2;
-    this.penOpacity = parseFloat(localStorage.getItem('planeer_pen_opacity')) || 1.0;
-    this.highlighterColor = localStorage.getItem('planeer_hl_color') || '#facc15';
-    this.highlighterSize = parseInt(localStorage.getItem('planeer_hl_size')) || 15;
-    this.highlighterOpacity = parseFloat(localStorage.getItem('planeer_hl_opacity')) || 0.4;
+    this.penColor = '#ffffff';
+    this.penSize = 2;
+    this.penOpacity = 1.0;
+    this.highlighterColor = '#facc15';
+    this.highlighterSize = 15;
+    this.highlighterOpacity = 0.4;
     
-    this.penPresets = JSON.parse(localStorage.getItem('planeer_pen_presets')) || ['#ffffff', '#ff4d4d', '#4da6ff', '#54ff4d', '#ffed4d'];
-    this.hlPresets = JSON.parse(localStorage.getItem('planeer_hl_presets')) || ['#facc15', '#ff7b72', '#79c0ff', '#85e89d', '#ffed4d'];
+    this.penPresets = JSON.parse(localStorage.getItem('planeer_pen_presets')) || ['#ffffff', '#ff4d4d', '#4da6ff'];
+    this.hlPresets = JSON.parse(localStorage.getItem('planeer_hl_presets')) || ['#facc15', '#ff7b72', '#79c0ff'];
 
     // Interaction state
     this.isDrawing = false;
@@ -84,51 +84,12 @@ class NeonDrawingBoard {
     this.canvas.style.touchAction = 'none';
 
     this.canvasContainer.appendChild(this.canvas);
-    
-    // Add floating eraser toggle
-    if (!this.readOnly) {
-      this.floatingEraserBtn = document.createElement('button');
-      this.floatingEraserBtn.className = 'floating-eraser-toggle';
-      this.floatingEraserBtn.innerHTML = '🧽';
-      this.floatingEraserBtn.title = '지우개 빠른 전환';
-      
-      let prevTool = 'pen';
-      
-      // We use pointerdown instead of click for faster response on touch
-      this.floatingEraserBtn.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        if (this.currentTool === 'eraser') {
-          // Switch back to previous tool
-          this.currentTool = prevTool;
-          this.floatingEraserBtn.classList.remove('active');
-        } else {
-          // Switch to eraser
-          prevTool = this.currentTool;
-          this.currentTool = 'eraser';
-          this.floatingEraserBtn.classList.add('active');
-        }
-        
-        // Sync toolbar UI
-        const toolBtns = this.toolbar.querySelectorAll('.tool-btn');
-        toolBtns.forEach(b => b.classList.remove('active'));
-        const activeBtn = this.toolbar.querySelector(`.tool-btn[data-tool="${this.currentTool}"]`);
-        if (activeBtn) activeBtn.classList.add('active');
-        
-        this.updateSettingsUI();
-      });
-      
-      this.canvasContainer.appendChild(this.floatingEraserBtn);
-    }
-    
     this.wrapper.appendChild(this.canvasContainer);
     this.container.appendChild(this.wrapper);
 
     // Auto-expand if initial strokes go beyond default height
     let maxY = 0;
     this.strokes.forEach(stroke => {
-      if (!stroke.points) return;
       stroke.points.forEach(p => {
         if (p.y > maxY) maxY = p.y;
       });
@@ -151,14 +112,18 @@ class NeonDrawingBoard {
       </div>
       <div class="global-settings" style="display:flex; align-items:center; gap:4px; margin-left:auto; border-left: 1px solid #444; padding-left: 8px;">
         <span style="font-size:0.8rem; color:#aaa; margin-right:4px;">배경지</span>
-        <div class="bg-presets" style="display:flex; gap:4px; align-items:center;">
-          <input type="color" id="custom-bg-color" class="color-picker" value="${this.bgColor}" style="width:28px; height:28px; border:none; cursor:pointer; padding:0; background:transparent;" title="클릭하여 배경색 변경">
+        <div class="bg-presets" style="display:flex; gap:4px;">
+          <button class="bg-preset-btn" data-color="#1e1e1e" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#1e1e1e' ? '#3b82f6' : '#555'}; background-color:#1e1e1e; cursor:pointer;" title="기본(어두운색)"></button>
+          <button class="bg-preset-btn" data-color="#ffffff" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffffff' ? '#3b82f6' : '#ccc'}; background-color:#ffffff; cursor:pointer;" title="흰색"></button>
+          <button class="bg-preset-btn" data-color="#fdfd96" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#fdfd96' ? '#3b82f6' : '#ccc'}; background-color:#fdfd96; cursor:pointer;" title="연노랑"></button>
+          <button class="bg-preset-btn" data-color="#b5ead7" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#b5ead7' ? '#3b82f6' : '#ccc'}; background-color:#b5ead7; cursor:pointer;" title="연민트"></button>
+          <button class="bg-preset-btn" data-color="#ffb7b2" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#ffb7b2' ? '#3b82f6' : '#ccc'}; background-color:#ffb7b2; cursor:pointer;" title="연분홍"></button>
+          <button class="bg-preset-btn" data-color="#c7ceea" style="width:20px; height:20px; border-radius:50%; border:2px solid ${this.bgColor === '#c7ceea' ? '#3b82f6' : '#ccc'}; background-color:#c7ceea; cursor:pointer;" title="연파랑"></button>
         </div>
       </div>
       <div class="drawing-actions">
         <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
         <button class="action-btn" id="btn-reset-view" title="1:1 화면 초기화">🔍</button>
-        <span id="zoom-text" style="font-size:0.85rem; font-weight:bold; color:#818cf8; margin-left: 4px; margin-right: 8px; min-width: 40px; text-align: center;">100%</span>
         <button class="action-btn" id="btn-pen-mode" title="손가락 그리기 허용됨 (클릭하여 펜 전용 모드로 전환)">👆</button>
         <button class="action-btn" id="btn-undo" title="실행 취소">↩️</button>
         <button class="action-btn" id="btn-redo" title="다시 실행">↪️</button>
@@ -203,33 +168,22 @@ class NeonDrawingBoard {
     }
 
     const bgPresetBtns = this.toolbar.querySelectorAll('.bg-preset-btn');
-    const updateBgColor = (color) => {
-      this.bgColor = color;
-      this.canvasContainer.style.backgroundColor = this.bgColor;
-      this.strokes = this.strokes.filter(s => !s.isBg);
-      this.strokes.unshift({ isBg: true, color: this.bgColor });
-      this.saveState();
-      
-      bgPresetBtns.forEach(b => {
-        b.style.borderColor = (b.dataset.color === color) ? '#3b82f6' : (b.dataset.color === '#1e1e1e' ? '#555' : '#ccc');
-      });
-      const customPicker = this.toolbar.querySelector('#custom-bg-color');
-      if (customPicker) customPicker.value = color;
-    };
-
     bgPresetBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        updateBgColor(btn.dataset.color);
+        this.bgColor = btn.dataset.color;
+        this.canvasContainer.style.backgroundColor = this.bgColor;
+        this.strokes = this.strokes.filter(s => !s.isBg);
+        this.strokes.unshift({ isBg: true, color: this.bgColor });
+        this.saveState();
+        
+        // Update active styling
+        bgPresetBtns.forEach(b => {
+          b.style.borderColor = (b.dataset.color === '#1e1e1e') ? '#555' : '#ccc';
+        });
+        btn.style.borderColor = '#3b82f6';
       });
     });
-
-    const customBgColor = this.toolbar.querySelector('#custom-bg-color');
-    if (customBgColor) {
-      customBgColor.addEventListener('input', (e) => {
-        updateBgColor(e.target.value);
-      });
-    }
 
     const btnResetView = this.toolbar.querySelector('#btn-reset-view');
     if (btnResetView) {
@@ -282,40 +236,30 @@ class NeonDrawingBoard {
   updateSettingsUI() {
     this.settingsContainer.innerHTML = '';
     
-    const renderPresets = (presets, activeColor) => {
-      return presets.map((color, idx) => {
-        const isActive = color === activeColor;
-        const border = isActive ? '2px solid #3b82f6' : '2px solid #555';
-        return `<button class="preset-color" style="background:${color}; width:32px; height:32px; border-radius:50%; border:${border}; cursor:pointer; padding:0; box-shadow: 0 1px 3px rgba(0,0,0,0.3);" data-index="${idx}" data-color="${color}" title="클릭하여 색상 선택, 길게 눌러 변경"></button>`;
-      }).join('');
+    const renderPresets = (presets) => {
+      return presets.map((color, idx) => 
+        `<button class="preset-color" style="background:${color}; width:24px; height:24px; border-radius:50%; border:1px solid #555; cursor:pointer; padding:0;" data-index="${idx}" data-color="${color}" title="길게 누르면 색상 변경"></button>`
+      ).join('');
     };
 
     if (this.currentTool === 'pen') {
       this.settingsContainer.innerHTML = `
-        <div class="setting-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding: 4px; width: 100%;">
-          <div style="display:flex; gap:8px;">
-            ${renderPresets(this.penPresets, this.penColor)}
-            <input type="color" class="color-picker" id="hidden-preset-picker" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
-            <input type="color" class="color-picker" value="${this.penColor}" id="pen-color" style="width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; padding: 0; background: transparent; flex-shrink: 0;" title="연속 색상 지정 (자유 선택)">
-          </div>
-          <div style="display:flex; flex-direction:column; gap:2px; margin-left: auto; flex-shrink: 0;">
-            <input type="range" class="size-slider" min="1" max="20" value="${this.penSize}" id="pen-size" title="굵기" style="width: 80px;">
-            <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.penOpacity}" id="pen-opacity" title="농도" style="width: 80px;">
-          </div>
+        <div class="setting-group" style="display:flex; align-items:center; gap:6px;">
+          ${renderPresets(this.penPresets)}
+          <input type="color" class="color-picker" id="hidden-preset-picker" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
+          <input type="color" class="color-picker" value="${this.penColor}" id="pen-color" style="margin-left:4px;" title="색상 지정">
+          <input type="range" class="size-slider" min="1" max="20" value="${this.penSize}" id="pen-size" title="굵기">
+          <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.penOpacity}" id="pen-opacity" title="농도">
         </div>
       `;
     } else if (this.currentTool === 'highlighter') {
       this.settingsContainer.innerHTML = `
-        <div class="setting-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding: 4px; width: 100%;">
-          <div style="display:flex; gap:8px;">
-            ${renderPresets(this.hlPresets, this.highlighterColor)}
-            <input type="color" class="color-picker" id="hidden-preset-picker" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
-            <input type="color" class="color-picker" value="${this.highlighterColor}" id="hl-color" style="width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; padding: 0; background: transparent; flex-shrink: 0;" title="연속 색상 지정 (자유 선택)">
-          </div>
-          <div style="display:flex; flex-direction:column; gap:2px; margin-left: auto; flex-shrink: 0;">
-            <input type="range" class="size-slider" min="5" max="50" value="${this.highlighterSize}" id="hl-size" title="굵기" style="width: 80px;">
-            <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.highlighterOpacity}" id="hl-opacity" title="농도" style="width: 80px;">
-          </div>
+        <div class="setting-group" style="display:flex; align-items:center; gap:6px;">
+          ${renderPresets(this.hlPresets)}
+          <input type="color" class="color-picker" id="hidden-preset-picker" style="opacity:0; position:absolute; width:0; height:0; pointer-events:none;">
+          <input type="color" class="color-picker" value="${this.highlighterColor}" id="hl-color" style="margin-left:4px;" title="색상 지정">
+          <input type="range" class="size-slider" min="5" max="50" value="${this.highlighterSize}" id="hl-size" title="굵기">
+          <input type="range" class="opacity-slider" min="0.1" max="1" step="0.1" value="${this.highlighterOpacity}" id="hl-opacity" title="농도">
         </div>
       `;
     }
@@ -343,33 +287,38 @@ class NeonDrawingBoard {
       });
 
       this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const color = btn.dataset.color;
-          const isActive = (isPen && this.penColor === color) || (!isPen && this.highlighterColor === color);
-          
-          if (isActive) {
-            // If already active, open color picker to change it
-            targetPresetIndex = parseInt(btn.dataset.index);
-            hiddenPicker.value = color;
-            hiddenPicker.click();
-          } else {
-            // If not active, just set it as active
-            if (isPen) {
-              this.penColor = color;
-              localStorage.setItem('planeer_pen_color', color);
-            } else {
-              this.highlighterColor = color;
-              localStorage.setItem('planeer_hl_color', color);
-            }
-            this.settingsContainer.querySelector(colorInputId).value = color;
-            this.updateSettingsUI();
-          }
-        });
+        let pressTimer;
         
-        // Keep right click / long press as a fallback
+        const startPress = (e) => {
+          if (e.type === 'touchstart') e.preventDefault(); // Prevent text selection on mobile
+          pressTimer = setTimeout(() => {
+            targetPresetIndex = parseInt(btn.dataset.index);
+            hiddenPicker.value = btn.dataset.color;
+            hiddenPicker.click();
+            pressTimer = null;
+          }, 500);
+        };
+        
+        const endPress = (e) => {
+          if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+            const color = btn.dataset.color;
+            if (isPen) this.penColor = color;
+            else this.highlighterColor = color;
+            this.settingsContainer.querySelector(colorInputId).value = color;
+          }
+        };
+
+        btn.addEventListener('mousedown', startPress);
+        btn.addEventListener('touchstart', startPress, {passive: false});
+        btn.addEventListener('mouseup', endPress);
+        btn.addEventListener('mouseleave', () => { if(pressTimer) clearTimeout(pressTimer); });
+        btn.addEventListener('touchend', endPress);
+        
         btn.addEventListener('contextmenu', e => {
           e.preventDefault();
+          if(pressTimer) clearTimeout(pressTimer);
           targetPresetIndex = parseInt(btn.dataset.index);
           hiddenPicker.value = btn.dataset.color;
           hiddenPicker.click();
@@ -377,40 +326,16 @@ class NeonDrawingBoard {
       });
 
       this.settingsContainer.querySelector(colorInputId).addEventListener('input', e => {
-        const val = e.target.value;
-        if (isPen) {
-          this.penColor = val;
-          localStorage.setItem('planeer_pen_color', val);
-        } else {
-          this.highlighterColor = val;
-          localStorage.setItem('planeer_hl_color', val);
-        }
-        
-        this.settingsContainer.querySelectorAll('.preset-color').forEach(btn => {
-          if (btn.dataset.color === val) {
-            btn.style.border = '2px solid #3b82f6';
-          } else {
-            btn.style.border = '2px solid #555';
-          }
-        });
+        if (isPen) this.penColor = e.target.value;
+        else this.highlighterColor = e.target.value;
       });
       this.settingsContainer.querySelector(sizeInputId).addEventListener('input', e => {
-        if (isPen) {
-          this.penSize = parseInt(e.target.value);
-          localStorage.setItem('planeer_pen_size', this.penSize);
-        } else {
-          this.highlighterSize = parseInt(e.target.value);
-          localStorage.setItem('planeer_hl_size', this.highlighterSize);
-        }
+        if (isPen) this.penSize = parseInt(e.target.value);
+        else this.highlighterSize = parseInt(e.target.value);
       });
       this.settingsContainer.querySelector(opacityInputId).addEventListener('input', e => {
-        if (isPen) {
-          this.penOpacity = parseFloat(e.target.value);
-          localStorage.setItem('planeer_pen_opacity', this.penOpacity);
-        } else {
-          this.highlighterOpacity = parseFloat(e.target.value);
-          localStorage.setItem('planeer_hl_opacity', this.highlighterOpacity);
-        }
+        if (isPen) this.penOpacity = parseFloat(e.target.value);
+        else this.highlighterOpacity = parseFloat(e.target.value);
       });
     }
   }
@@ -420,21 +345,6 @@ class NeonDrawingBoard {
     this.canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
     this.canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
     this.canvas.addEventListener('pointerout', this.onPointerUp.bind(this));
-    this.canvas.addEventListener('pointercancel', this.onPointerUp.bind(this));
-    this.canvas.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      // Intercept S-Pen side button press which often fires contextmenu on Android
-      this.isTempEraser = true;
-      if (this.isDrawing && this.currentStroke) {
-        this.currentStroke = null;
-        this.points = [];
-      } else if (!this.isDrawing) {
-        this.isDrawing = true;
-        this.points = [];
-        const pos = this.getPointerPos(e);
-        this.eraseAt(pos);
-      }
-    });
   }
 
   getPointerPos(e) {
@@ -446,17 +356,11 @@ class NeonDrawingBoard {
   }
 
   onPointerDown(e) {
-    if (this.readOnly) return;
-    this.clearHoldTimer();
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     
-    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4) || e.altKey || e.ctrlKey || e.shiftKey || e.metaKey;
-    if (e.pointerType === 'mouse' && e.button !== 0 && !isEraserButton) return;
-    
-    // Preserve hover state for S-Pen because Android touch layer often masks the button press during pointerdown
-    if (e.pointerType === 'pen' && this.isTempEraser) {
-      // Keep this.isTempEraser as true
-    } else {
-      this.isTempEraser = isEraserButton;
+    this.isTempEraser = false;
+    if (e.pointerType === 'pen' && (e.button === 2 || e.button === 5 || (e.buttons & 2) || (e.buttons & 32))) {
+      this.isTempEraser = true;
     }
     
     if (this.penOnlyMode && e.pointerType === 'touch') {
@@ -565,15 +469,6 @@ class NeonDrawingBoard {
       this.canvasContainer.style.minHeight = `${containerHeight + 300}px`;
     }
 
-    // Dynamically check if eraser button is pressed during move
-    const isEraserButton = e.pointerType === 'eraser' || e.button === 2 || e.button === 5 || e.button === 1 || (e.buttons & 2) || (e.buttons & 32) || (e.buttons & 4) || e.altKey || e.ctrlKey || e.shiftKey || e.metaKey;
-    if (isEraserButton) {
-      this.isTempEraser = true;
-    } else if (e.pointerType === 'mouse') { 
-      // Only reset for mouse, since S-Pen often drops the button state during move
-      this.isTempEraser = false;
-    }
-    
     const activeTool = this.isTempEraser ? 'eraser' : this.currentTool;
 
     if (activeTool === 'pen' || activeTool === 'highlighter') {
@@ -621,12 +516,12 @@ class NeonDrawingBoard {
         this.strokes.push(this.currentStroke);
         this.saveState();
       }
+      this.currentStroke = null;
     } else if (activeTool === 'lasso') {
       this.applyLassoSelection();
       this.lassoPoints = [];
     }
 
-    this.currentStroke = null;
     this.points = [];
     this.isTempEraser = false;
     this.render();
@@ -838,11 +733,6 @@ class NeonDrawingBoard {
   }
 
   render() {
-    if (this.toolbar) {
-      const zoomText = this.toolbar.querySelector('#zoom-text');
-      if (zoomText) zoomText.innerText = Math.round(this.viewScale * 100) + '%';
-    }
-
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.ctx.save();

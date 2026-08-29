@@ -1764,7 +1764,7 @@ body.light-theme .lightness-slider {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   position: relative;
   z-index: 1100;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
   gap: 10px;
 }
 
@@ -1995,19 +1995,9 @@ body.light-theme .search-result-card:hover {
   align-items: center;
   gap: 5px;
   flex-wrap: nowrap !important;
-  justify-content: flex-start;
   width: auto;
-  max-width: 100%;
   margin: 0;
-  flex-shrink: 1;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  padding-bottom: 4px;
-}
-.header-controls::-webkit-scrollbar {
-  display: none;
+  flex-shrink: 0;
 }
 
 /* --- Floating History Controls (Undo/Redo) --- */
@@ -2084,7 +2074,6 @@ body.light-theme .floating-history-controls .ctrl-btn:hover:not(:disabled) {
   height: 30px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
-  flex-shrink: 0;
   border: 1px solid var(--panel-border);
   color: var(--text-secondary);
   cursor: pointer;
@@ -5240,25 +5229,4 @@ body.light-theme #font-size-modal #font-size-modal-backdrop {
   100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
 }
 
-
-
-@media (max-width: 950px) {
-  .header-toggle-btn .btn-text {
-    display: none !important;
-  }
-  .header-toggle-btn {
-    width: 36px !important;
-    height: 36px !important;
-    padding: 0 !important;
-    border-radius: 50% !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-  }
-  .header-controls {
-    flex-wrap: wrap !important;
-    overflow: visible !important;
-    gap: 8px !important;
-    row-gap: 8px !important;
-  }
-}
 

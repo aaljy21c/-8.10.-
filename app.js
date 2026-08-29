@@ -3268,22 +3268,40 @@ function setupEventListeners() {
 
       let processed = 0;
       files.forEach(file => {
-        compressAndSaveImage(file, (dataUrl) => {
-          state.diaryDraftImages.push({
-            src: dataUrl,
-            rotate: 0,
-            mode: 'cover',
-            filter: 'normal'
-          });
-          processed++;
-          if (processed === files.length) {
-            renderDiary();
-            if (statusSpan) {
-              statusSpan.textContent = '기록 추가 중...';
-              statusSpan.style.opacity = '0.7';
+        if (file.type.startsWith('video/') || file.type === 'application/pdf') {
+          FileDB.saveFile(file, file.type, file.name).then(id => {
+            state.diaryDraftImages.push({
+              fileId: id,
+              type: file.type.startsWith('video/') ? 'video' : 'pdf',
+              name: file.name
+            });
+            processed++;
+            if (processed === files.length) {
+              renderDiary();
+              if (statusSpan) {
+                statusSpan.textContent = '파일 추가 완료';
+                statusSpan.style.opacity = '0.7';
+              }
             }
-          }
-        });
+          }).catch(err => console.error(err));
+        } else {
+          compressAndSaveImage(file, (dataUrl) => {
+            state.diaryDraftImages.push({
+              src: dataUrl,
+              rotate: 0,
+              mode: 'cover',
+              filter: 'normal'
+            });
+            processed++;
+            if (processed === files.length) {
+              renderDiary();
+              if (statusSpan) {
+                statusSpan.textContent = '사진 추가 완료';
+                statusSpan.style.opacity = '0.7';
+              }
+            }
+          });
+        }
       });
 
       newRecordPhotoInput.value = '';
@@ -4388,14 +4406,7 @@ function renderTodoEditPreviews() {
     thumb.className = 'record-draft-thumb';
     const imgWrapper = document.createElement('div');
     imgWrapper.className = 'thumb-img-wrapper';
-    const img = document.createElement('img');
-    img.src = imgSrc.src;
-    img.style = getImageStyle(imgSrc);
-    img.style.cursor = 'pointer';
-    img.addEventListener('click', () => {
-      openLightbox(todoEditDraftImages, idx, true);
-    });
-    imgWrapper.appendChild(img);
+    renderMediaToContainer(imgSrc, imgWrapper, () => openLightbox(todoEditDraftImages, idx, true));
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'delete-thumb-btn';
@@ -5026,6 +5037,54 @@ function saveDiaries() {
 }
 
 // Render the diary entry (records) for the selected date
+
+function renderMediaToContainer(mediaObj, container, onClick) {
+  if (mediaObj.fileId) {
+    if (mediaObj.type === 'video') {
+      const vid = document.createElement('video');
+      vid.className = 'timeline-diary-img';
+      vid.style.width = '100%';
+      vid.style.height = '100%';
+      vid.style.objectFit = 'cover';
+      vid.style.cursor = onClick ? 'pointer' : 'default';
+      vid.style.borderRadius = '4px';
+      vid.muted = true;
+      vid.playsInline = true;
+      if (onClick) vid.addEventListener('click', onClick);
+      FileDB.getFile(mediaObj.fileId).then(f => {
+        if (f) {
+           vid.src = URL.createObjectURL(f.blob);
+           vid.preload = 'metadata';
+        }
+      });
+      container.appendChild(vid);
+    } else if (mediaObj.type === 'pdf') {
+      const pdfIcon = document.createElement('div');
+      pdfIcon.style.width = '100%';
+      pdfIcon.style.height = '100%';
+      pdfIcon.style.display = 'flex';
+      pdfIcon.style.flexDirection = 'column';
+      pdfIcon.style.alignItems = 'center';
+      pdfIcon.style.justifyContent = 'center';
+      pdfIcon.style.background = '#fef2f2';
+      pdfIcon.style.color = '#ef4444';
+      pdfIcon.style.cursor = onClick ? 'pointer' : 'default';
+      pdfIcon.style.borderRadius = '4px';
+      pdfIcon.innerHTML = '<span style="font-size:24px;">📄</span><span style="font-size:12px; margin-top:4px;">PDF</span>';
+      if (onClick) pdfIcon.addEventListener('click', onClick);
+      container.appendChild(pdfIcon);
+    }
+  } else {
+    const img = document.createElement('img');
+    img.className = 'timeline-diary-img';
+    img.src = typeof mediaObj === 'string' ? mediaObj : mediaObj.src;
+    img.style = getImageStyle(typeof mediaObj === 'string' ? {src: mediaObj, mode:'cover'} : mediaObj);
+    img.style.cursor = onClick ? 'pointer' : 'default';
+    if (onClick) img.addEventListener('click', onClick);
+    container.appendChild(img);
+  }
+}
+
 function renderDiary() {
   const dateKey = state.selectedDate;
 
@@ -5221,14 +5280,7 @@ function renderDiary() {
           const imgWrapper = document.createElement('div');
           imgWrapper.className = 'thumb-img-wrapper';
 
-          const img = document.createElement('img');
-          img.src = imgSrc.src;
-          img.style = getImageStyle(imgSrc);
-          img.style.cursor = 'pointer';
-          img.addEventListener('click', () => {
-            openLightbox(state.diaryDraftImages, idx, true);
-          });
-          imgWrapper.appendChild(img);
+          renderMediaToContainer(imgSrc, imgWrapper, () => openLightbox(state.diaryDraftImages, idx, true));
 
           const delBtn = document.createElement('button');
           delBtn.type = 'button';
@@ -5517,14 +5569,7 @@ function renderDiary() {
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'thumb-img-wrapper';
 
-        const img = document.createElement('img');
-        img.src = imgSrc.src;
-        img.style = getImageStyle(imgSrc);
-        img.style.cursor = 'pointer';
-        img.addEventListener('click', () => {
-          openLightbox(state.diaryDraftImages, idx, true);
-        });
-        imgWrapper.appendChild(img);
+        renderMediaToContainer(imgSrc, imgWrapper, () => openLightbox(state.diaryDraftImages, idx, true));
 
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
@@ -6038,8 +6083,49 @@ function showLightboxImage(idx) {
   void lightboxImg.offsetWidth; // Trigger reflow
   lightboxImg.classList.add('lightbox-image-transition');
 
-  lightboxImg.src = src;
-  lightboxImg.style = getImageStyle(currentImg);
+  
+  if (currentImg && currentImg.fileId) {
+    lightboxImg.style.display = 'none';
+    let mediaContainer = document.getElementById('lightbox-media-container');
+    if (!mediaContainer) {
+      mediaContainer = document.createElement('div');
+      mediaContainer.id = 'lightbox-media-container';
+      mediaContainer.style.width = '100%';
+      mediaContainer.style.height = '100%';
+      mediaContainer.style.display = 'flex';
+      mediaContainer.style.alignItems = 'center';
+      mediaContainer.style.justifyContent = 'center';
+      lightboxImg.parentNode.insertBefore(mediaContainer, lightboxImg);
+    }
+    mediaContainer.innerHTML = '';
+    mediaContainer.style.display = 'flex';
+    if (currentImg.type === 'video') {
+      const vid = document.createElement('video');
+      vid.style.maxWidth = '100%';
+      vid.style.maxHeight = '100%';
+      vid.controls = true;
+      vid.autoplay = true;
+      FileDB.getFile(currentImg.fileId).then(f => {
+        if (f) vid.src = URL.createObjectURL(f.blob);
+      });
+      mediaContainer.appendChild(vid);
+    } else if (currentImg.type === 'pdf') {
+       const iframe = document.createElement('iframe');
+       iframe.style.width = '100%';
+       iframe.style.height = '100%';
+       FileDB.getFile(currentImg.fileId).then(f => {
+         if (f) iframe.src = URL.createObjectURL(f.blob);
+       });
+       mediaContainer.appendChild(iframe);
+    }
+  } else {
+    lightboxImg.style.display = 'block';
+    const mediaContainer = document.getElementById('lightbox-media-container');
+    if (mediaContainer) mediaContainer.style.display = 'none';
+    lightboxImg.src = src;
+    lightboxImg.style = getImageStyle(currentImg);
+  }
+
 
   if (downloadLink) {
     downloadLink.href = src;
@@ -7324,10 +7410,13 @@ function renderTodos() {
     filteredTodos = dayTodos.filter(todo => Boolean(todo.isRoutine));
   } else if (filterCat !== 'all') {
     const filterCatObj = state.categories[filterCat];
-    const filterCatLabel = (filterCatObj && filterCatObj.label) ? String(filterCatObj.label).toLowerCase() : '';
     filteredTodos = dayTodos.filter(todo => {
-      const cat = String(todo.category || 'other').toLowerCase();
-      return cat === String(filterCat).toLowerCase() || (filterCatLabel && cat === filterCatLabel);
+      let cat = todo.category || 'other';
+      if (!state.categories[cat]) {
+        const matchKey = Object.keys(state.categories).find(k => state.categories[k].label === cat);
+        if (matchKey) cat = matchKey;
+      }
+      return String(cat).toLowerCase() === String(filterCat).toLowerCase();
     });
   }
 

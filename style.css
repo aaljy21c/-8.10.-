@@ -1994,12 +1994,20 @@ body.light-theme .search-result-card:hover {
   display: flex !important;
   align-items: center;
   gap: 5px;
-  flex-wrap: wrap !important;
-  justify-content: center;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start;
   width: auto;
   max-width: 100%;
   margin: 0;
   flex-shrink: 1;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 4px;
+}
+.header-controls::-webkit-scrollbar {
+  display: none;
 }
 
 /* --- Floating History Controls (Undo/Redo) --- */

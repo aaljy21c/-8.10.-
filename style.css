@@ -5241,3 +5241,24 @@ body.light-theme #font-size-modal #font-size-modal-backdrop {
 }
 
 
+
+@media (max-width: 950px) {
+  .header-toggle-btn .btn-text {
+    display: none !important;
+  }
+  .header-toggle-btn {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+  .header-controls {
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+    gap: 8px !important;
+    row-gap: 8px !important;
+  }
+}
+

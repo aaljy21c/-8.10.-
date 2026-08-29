@@ -4575,7 +4575,7 @@ function renderSearchResultsSection() {
   Object.keys(state.todos).forEach(dateKey => {
     state.todos[dateKey].forEach(todo => {
       const cat = getCategory(todo.category);
-      const catLabel = cat ? cat.label.toLowerCase() : '';
+      const catLabel = cat && cat.label ? String(cat.label).toLowerCase() : '';
       if (todo.text.toLowerCase().includes(query) || catLabel.includes(query)) {
         results.push({
           type: '📅 할일',
@@ -6307,7 +6307,7 @@ function createCell(day, dateKey, isOtherMonth = false, isToday = false) {
     if (state.todos[dateKey]) {
       hasMatch = state.todos[dateKey].some(todo => {
         const cat = getCategory(todo.category);
-        const catLabel = cat ? cat.label.toLowerCase() : '';
+        const catLabel = cat && cat.label ? String(cat.label).toLowerCase() : '';
         return todo.text.toLowerCase().includes(query) || catLabel.includes(query);
       });
     }
@@ -7306,7 +7306,7 @@ function renderTodos() {
     Object.keys(state.todos).forEach(dateKey => {
       state.todos[dateKey].forEach(todo => {
         const cat = getCategory(todo.category);
-        const catLabel = cat ? cat.label.toLowerCase() : '';
+        const catLabel = cat && cat.label ? String(cat.label).toLowerCase() : '';
         if (todo.text.toLowerCase().includes(query) || catLabel.includes(query)) {
           dayTodos.push({ ...todo, dateKey });
         }
@@ -7324,10 +7324,10 @@ function renderTodos() {
     filteredTodos = dayTodos.filter(todo => Boolean(todo.isRoutine));
   } else if (filterCat !== 'all') {
     const filterCatObj = state.categories[filterCat];
-    const filterCatLabel = filterCatObj ? filterCatObj.label.toLowerCase() : '';
+    const filterCatLabel = (filterCatObj && filterCatObj.label) ? String(filterCatObj.label).toLowerCase() : '';
     filteredTodos = dayTodos.filter(todo => {
-      const cat = (todo.category || 'other').toLowerCase();
-      return cat === filterCat.toLowerCase() || (filterCatLabel && cat === filterCatLabel);
+      const cat = String(todo.category || 'other').toLowerCase();
+      return cat === String(filterCat).toLowerCase() || (filterCatLabel && cat === filterCatLabel);
     });
   }
 

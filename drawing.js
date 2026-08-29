@@ -30,8 +30,13 @@ class NeonDrawingBoard {
     
     const bgStroke = this.strokes.find(s => s.isBg);
 
-    const savedBg = localStorage.getItem('planeer_drawing_bg');
-    this.bgColor = bgStroke ? bgStroke.color : (savedBg || '#1e1e1e');
+    let globalBg = '#1e1e1e';
+    if (window.state && window.state.settings && window.state.settings.drawingBgColor) {
+      globalBg = window.state.settings.drawingBgColor;
+    } else {
+      globalBg = localStorage.getItem('planeer_drawing_bg') || '#1e1e1e';
+    }
+    this.bgColor = bgStroke ? bgStroke.color : globalBg;
     this.undoStack = [];
     this.redoStack = [];
 
@@ -171,12 +176,14 @@ class NeonDrawingBoard {
         <button class="action-btn" id="btn-save-image" title="이미지로 저장">💾</button>
         <button class="action-btn" id="btn-toggle-sidebar" title="페이지 목록">📑</button>
         <button class="action-btn" id="btn-export-pdf" title="PDF로 다운로드" style="display:none">📥</button>
+        <button class="action-btn" id="btn-zoom-out" title="축소">➖</button>
         <button class="action-btn" id="btn-reset-view" title="1:1 화면 초기화">🔍</button>
+        <button class="action-btn" id="btn-zoom-in" title="확대">➕</button>
         <button class="action-btn" id="btn-pen-mode" title="손가락 그리기 허용됨 (클릭하여 펜 전용 모드로 전환)">👆</button>
         <button class="action-btn" id="btn-undo" title="실행 취소">↩️</button>
         <button class="action-btn" id="btn-redo" title="다시 실행">↪️</button>
         <button class="action-btn" id="btn-clear" title="전체 지우기">🗑️</button>
-        ${this.onClose ? `<button class="drawing-toolbar-close-btn" id="btn-close-drawing" title="저장 후 닫기">저장/닫기</button>` : ''}
+        ${this.onClose ? `<button class="drawing-toolbar-close-btn" id="btn-close-drawing" title="저장 후 닫기">✅ 저장/닫기</button>` : ''}
       </div>
     `;
 
@@ -229,6 +236,11 @@ class NeonDrawingBoard {
       bgColorPicker.addEventListener('input', (e) => {
         this.bgColor = e.target.value;
         localStorage.setItem('planeer_drawing_bg', this.bgColor);
+        if (window.state) {
+          if (!window.state.settings) window.state.settings = {};
+          window.state.settings.drawingBgColor = this.bgColor;
+          if (typeof window.saveData === 'function') window.saveData();
+        }
         this.canvasContainer.style.backgroundColor = this.bgColor;
         this.strokes = this.strokes.filter(s => !s.isBg);
         this.strokes.unshift({ isBg: true, color: this.bgColor });
@@ -329,6 +341,22 @@ class NeonDrawingBoard {
       });
     }
 
+    const btnZoomIn = this.toolbar.querySelector('#btn-zoom-in');
+    if (btnZoomIn) {
+      btnZoomIn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.doZoom(1.2);
+      });
+    }
+
+    const btnZoomOut = this.toolbar.querySelector('#btn-zoom-out');
+    if (btnZoomOut) {
+      btnZoomOut.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.doZoom(1 / 1.2);
+      });
+    }
+
     const btnResetView = this.toolbar.querySelector('#btn-reset-view');
 
     if (btnResetView) {
@@ -377,6 +405,40 @@ class NeonDrawingBoard {
 
     this.settingsContainer = this.toolbar.querySelector('.drawing-settings');
     this.updateSettingsUI();
+  }
+
+  onWheel(e) {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? (1 / 1.1) : 1.1;
+      this.doZoom(zoomFactor, e);
+    }
+  }
+
+  doZoom(factor, e = null) {
+    let newScale = this.viewScale * factor;
+    newScale = Math.max(0.2, Math.min(newScale, 5.0));
+    
+    let zoomCenterX, zoomCenterY;
+    const rect = this.canvas.getBoundingClientRect();
+    if (e) {
+      zoomCenterX = e.clientX - rect.left;
+      zoomCenterY = e.clientY - rect.top;
+    } else {
+      zoomCenterX = rect.width / 2;
+      zoomCenterY = rect.height / 2;
+    }
+
+    const mouseBeforeX = (zoomCenterX - this.panX) / this.viewScale;
+    const mouseBeforeY = (zoomCenterY - this.panY) / this.viewScale;
+
+    this.viewScale = newScale;
+
+    this.panX = zoomCenterX - mouseBeforeX * this.viewScale;
+    this.panY = zoomCenterY - mouseBeforeY * this.viewScale;
+
+    this.updateZoomIndicator();
+    this.render();
   }
 
   updateZoomIndicator() {
@@ -485,6 +547,9 @@ class NeonDrawingBoard {
     this.canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
     this.canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
     this.canvas.addEventListener('pointerout', this.onPointerUp.bind(this));
+    
+    // Mouse wheel zoom
+    this.wrapper.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
   }
 
   getPointerPos(e) {

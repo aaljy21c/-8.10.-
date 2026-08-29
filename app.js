@@ -118,6 +118,15 @@ const PRESET_COLORS = [
 ];
 
 // Helper to get category details safely
+
+// Helper to check if drawing data exists
+function hasDrawingData(data) {
+  if (!data) return false;
+  if (Array.isArray(data)) return data.length > 0;
+  if (data && data.type === 'pdf_drawing') return true;
+  return false;
+}
+
 function getCategory(categoryId) {
   if (categoryId === 'none' || !categoryId) {
     return { label: '', color: '#ffffff', isNone: true };
@@ -7351,7 +7360,7 @@ function formatTimeKorean(timeStr) {
 
 // Render Todo Items for the selected date
 function renderTodos() {
-  try { // injected_debug
+  
   const dateObj = new Date(state.selectedDate);
   const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
   const formattedText = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${weekdays[dateObj.getDay()]})`;
@@ -7867,7 +7876,7 @@ function renderTodos() {
     todoItemsList.appendChild(item);
   });
 
-  } catch (e) { alert("Error in renderTodos: " + e.message + "\n" + e.stack); console.error(e); }
+  
 }
 
 // Run init on window load

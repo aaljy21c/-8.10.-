@@ -36,11 +36,17 @@
   background: none;
   border: 1px solid transparent;
   color: var(--text-color, #fff);
-  font-size: 1.2rem;
-  padding: 6px;
+  font-size: 1.1rem;
+  padding: 4px;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
 }
 
 .tool-btn:hover, .action-btn:hover {
@@ -141,33 +147,47 @@
 
 .drawing-fullscreen-modal .neon-drawing-toolbar {
   position: fixed;
-  bottom: 20px;
+  top: 10px;
+  bottom: auto;
   left: 50%;
   transform: translateX(-50%);
   border-radius: 12px;
-  padding: 8px 16px;
+  padding: 6px 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  background-color: rgba(30, 30, 30, 0.85);
+  background-color: rgba(30, 30, 30, 0.95);
   backdrop-filter: blur(12px);
   width: 95%;
   max-width: 600px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  top: auto;
   z-index: 10100;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: center;
+  gap: 4px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.drawing-fullscreen-modal .neon-drawing-toolbar::-webkit-scrollbar {
+  display: none;
 }
 
 .drawing-toolbar-close-btn {
   background: #ef4444;
   color: white;
   border: none;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
-  margin-left: 8px;
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
+  height: 32px;
+  font-size: 0.9rem;
+  margin-left: auto;
 }
 
 .drawing-toolbar-close-btn:hover {
